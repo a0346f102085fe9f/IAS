@@ -1,0 +1,422 @@
+/*
+	IAS Default Night Stylesheet v1
+	Based on Gruvbox Dark
+
+	Colors:
+	- Primary text 		#fbf1c7
+	- Secondary text 	#a89984
+	- Tertiary text 	#7c6f64
+
+	- Link type A 			#98971a			Internal automatically generated link
+	- Link type A :hover	#458588
+	- Link type B 			#d79921 		Internal user-made link
+	- Link type C 			#8ec07c 		External link
+	- Link type C :hover	Primary Text 	
+
+	- Navbar background 	#111111
+	- Story background 		#282828
+	- Note background 		#3c3836
+
+	- Pillow background 	#eecc66
+	- Pillow text 			#3c3836
+
+	- Button text 			#ebdbb2
+	- Button background 	#3c3836
+	- Button border 		#bdae93
+
+	- Horizontal line 		Tertiary text
+
+	- Status background 	#2C2C2C
+	- Status default text	#DCDCDC
+	- Status info 			...
+	- Status success 		#72D5A3
+	- Status error 			#DCA3A3
+
+	- <code> background 	#504945
+
+
+
+
+	- Vibrant red			#fb4934
+	- Vibrant green 		#b8bb26
+	- Vibrant yellow 		#fabd2f
+	- Vibrant blue 			#83a598
+	- Vibrant purple 		#d3869b
+	- Vibrant aqua 			#8ec07c
+	- Vibrant orange 		#fe8019
+
+	- Pale red 				#cc241d
+	- Pale green 			#98971a
+	- Pale yellow 			#d79921
+	- Pale blue 			#458588
+	- Pale purple 			#b16286
+	- Pale aqua 			#689d6a
+	- Pale orange 			#d65d0e
+*/
+
+/* Generic */
+html {
+	touch-action: manipulation;
+}
+
+body {
+	background-color: #282828;
+	color: #fbf1c7;
+
+	font-size: 15pt;
+	margin: 0em;
+
+	word-break: break-word;
+}
+
+nav {
+	background-color: #202020;
+	
+	position: sticky;
+	top: 0px;
+
+	z-index: 10;
+}
+
+@media (pointer: fine) {
+	nav {
+		box-shadow: 0px 0px 12px #000000;
+	}
+}
+
+content {
+	display: block;
+	max-width: 60rem;
+	margin: 0px auto;
+}
+
+h1, h2, h3, h4, h5, h6 {
+	margin-bottom: 0px;
+}
+
+hr {
+	border: 1px solid #7c6f64;
+}
+
+sup {
+	color: #a89984;
+}
+
+a 			{ text-decoration: none; }
+a:hover 	{ text-decoration: underline; }
+
+a 						{ color: #8ec07c; }
+a:hover 				{ color: #fbf1c7; }
+a.internal 				{ color: #d79921; }
+a.internal.auto 		{ color: #98971a; }
+a.internal.auto:hover 	{ color: #458588; }
+
+/* Good looking tables */
+table {
+	border-collapse: collapse;
+	border-spacing: 0;
+	caption-side: bottom;
+	
+	box-shadow: 2px 2px #AA4801;
+}
+
+td, th {
+	padding: .2em 1em;
+	border: 1.5px solid #ff8001;
+}
+
+/* Varius input elements */
+textarea {
+	color: inherit;
+	background-color: #282828;
+
+	white-space: pre-wrap;
+
+	box-sizing: border-box;
+	width: 100%;
+	border: 0em;
+	margin: 0em;
+	padding: 0em;
+
+	font-size: inherit;
+	font-family: inherit;
+}
+
+input[type="text"] {
+	color: inherit;
+	background-color: #282828;
+
+	box-sizing: border-box;
+	width: 100%;
+
+	font-size: inherit;
+	font-family: inherit;
+}
+
+/* Code blocks */
+code {
+	display: inline-block;
+	width: 100%;
+	
+	margin-bottom: 1em;
+	border-radius: 3px;
+	
+	white-space: pre;
+	font-family: monospace;
+	font-size: 75%;
+	
+	background-color: #504945;
+	color: #fb4934;
+	
+	overflow: auto;
+}
+
+code a {
+	color: #ff5914;
+	font-weight: bold;
+}
+
+/* Build cool looking consoles out of code blocks */
+code.long {
+	min-height: 15em;
+}
+
+code.blinker::after{
+	content: "_";
+}
+
+/* Enable GPU-intensive effects only on desktop devices */
+@media (pointer: fine) {
+	code.glows {
+		text-shadow: 0px 0px 40px;
+	}
+}
+
+
+button {
+	background-color: #3c3836;
+	color: #ebdbb2;
+	border: 1px solid #bdae93;
+	cursor: pointer;
+}
+
+button:hover {
+	background-color: #7c6f64;
+}
+
+button[disable="true"] {
+	cursor: default;
+	color: #7c6f64;
+}
+
+button[disable="true"]:hover {
+	background-color: #3c3836;
+}
+
+button.alert {
+	background: linear-gradient(#d65d0e 0%, #3c3836 50%);
+	border-color: #fe8019;
+}
+
+button.alert:hover {
+	background: linear-gradient(#fe8019 0%, #3c3836 50%);
+}
+
+/* Navbar contents */
+.nav_topbar {
+	padding: .2em;
+	display: grid;
+	align-items: center;
+}
+
+.nav_search {
+	display: none;
+	max-height: 1.2em;
+	justify-self: right;
+}
+
+.nav_buttons button {
+	height: 3em;
+	min-width: 6em;
+	max-width: 15em;
+}
+
+/* If narrow, topbar grid switches to rows */
+/* Button grid is engaged to stretch them */
+@media (max-width: 65em) {
+	.nav_topbar {
+		grid-template-rows: auto auto;
+	}
+
+	.nav_buttons {
+		display: grid;
+		grid-auto-flow: column;
+	}
+
+	.nav_search {
+		margin-top: .2em;
+		display: none;
+	}
+
+	.nav_search.open {
+		display: block;
+	}
+}
+
+/* If wide, topbar grid switches to columns */
+/* Search becomes visible, width always 25em */
+@media (min-width: 65em) {
+	.nav_topbar {
+		grid-template-columns: auto auto;
+	}
+
+	.nav_search {
+		margin: 0em 1em;
+		max-width: 25em;
+	}
+}
+
+.nav_dropdown {
+	background-color: inherit;
+	padding: 1em;
+
+	overflow: auto;
+	max-height: 33em;
+
+	display: none;
+}
+
+.nav_dropdown.open { display: block; }
+
+/* If VERY wide, dropdown relocates to the side and doesn't obscure notes */
+@media (min-width: 120em) {
+	.nav_dropdown {
+		float: left;
+		max-height: 60em;
+	}
+}
+
+/* Story contents */
+content .box {
+	background-color: #3c3836;
+	
+	min-height: 5rem;
+	margin: 1rem 0px;
+	padding: 1rem;
+
+	border-radius: 10px;
+}
+
+content .box.attention {
+	background-color: #fbf1c7;
+}
+
+/* Note contents */
+.note_header {
+	display: grid;
+	grid-template: 1fr auto / 1fr auto;
+}
+
+.note_header .title {
+	color: #a89984;
+
+	font-size: 250%;
+}
+
+.note_header .date {
+	color: #7c6f64;
+
+	margin-bottom: 1em;
+}
+
+.note_header .tools {
+	
+}
+
+.toolbar button {
+	width: 5em;
+	height: 5em;
+}
+
+.note_body {
+	white-space: pre-wrap;
+}
+
+.editing {
+	background-color: #282828;
+}
+
+/* Status (aka notification) boxes */
+.status_area {
+	position: fixed;
+	
+	top: 0px;
+	right: 0px;
+	margin: 1em;
+
+	z-index: 10;
+}
+
+.status_box {
+	background-color: #2C2C2C;
+	color: #DCDCDC;
+
+	min-height: 3em;
+	min-width: 15em;
+
+	padding: 1em;
+
+	border-radius: 5px;
+}
+
+.status_box.success { color: #72D5A3; }
+.status_box.error 	{ color: #DCA3A3; }
+
+.status_box.success hr { border-color: #72D5A3; }
+.status_box.error 	hr { border-color: #DCA3A3; }
+
+/* Generic hide */
+.hide {
+	display: none;
+}
+
+/* Dropdowns */
+.dropdown_root {
+	position: relative;
+}
+
+.dropdown {
+	background-color: #3c3836;
+
+	position: absolute;
+
+	box-sizing: border-box;
+	padding: 0em 1em 1em 1em;
+	border-radius: 0px 0px 5px 5px;
+}
+
+.dropdown button {
+	width: 100%;
+}
+
+/* Search results list */
+.search_result { 
+	margin: .5em 0em;
+}
+
+/* Tags */
+.tag {
+	background-color: #eecc66;
+	color: #3c3836;
+
+	display: inline-block;
+
+	border-radius: 1em;
+	line-height: 1.2em;
+	padding: 0em .4em;
+	margin: 0em .1em;
+}
+
+.tag_list {
+	line-height: 1.5em;
+}
