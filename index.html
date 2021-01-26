@@ -416,6 +416,9 @@ ias.bootloader = function() {
 		navbar.init()
 		dropdown.init()
 
+		story.open_note("Warning")
+		story.open_note("Search")
+
 		// Check whether the URL is clean of anchors
 		// If yes, open the default note
 		// Otherwise, open the linked note
@@ -1868,8 +1871,13 @@ ias.search = function() {
 		for (var i = 0; i < len; i++) {
 			var title = search.idx.id_to_filename[i]
 
+			// Can't fetch from poneb.in...
+			// Let's simply link then
+			var paste_id = (title.slice(title.lastIndexOf("-") + 1)).slice(0, -4)
+			var link = "https://poneb.in/" + paste_id
+
 			var note = core.create_note(title)
-			note.remote_url = title
+			note.body = "Open at poneb.in: <a href=\""+link+"\">"+link+"</a>\n\nThe pastes here... they are too hot for GitHub.\n\nCan't fetch from poneb.in directly because `Access-Control-Allow-Origin: *` header missing.\n\nEven though you see no text, More -> \"Find similar notes\" button still functions as intended!"
 
 			search.idx._documents[i] = {note: note}
 		}
@@ -2300,21 +2308,27 @@ if ("lunr" in search) {
 }
 
 function show_index_download_prompt() {
-	note.ui.set_body("<p>The search needs to download one of the indexes to work.</p><p>A single index weighs ~50mb and you can't have multiple because your browser would likely run out of memory.</p><p>Click one of the buttons below:</p>")
+	note.ui.set_body("<p>The search needs to download one of the indexes to work.</p><p>It can take up to a minute to evaluate an index, depending on your device.</p><p>Click one of the buttons below:</p>")
 
-	var button = add("button", note.ui.body)
+	var indexes = []
 
-	button.innerText = "Index A"
-	button.onclick = download_index
+	indexes.push( {title: "Full Anonymous directory index, 53.3M", url: "index_a.js"} )
+
+	for (var i = 0; i < indexes.length; i++) {
+		var index = indexes[i]
+
+		var button = add("button", note.ui.body)
+		button.innerText = index.title
+		button.onclick = function() { download_index(index.url) }
+	}
+
 }
 
-async function download_index() {
-	var name = "json_v1.js"
-
-	show_status("Downloading ["+name+"]...")
+async function download_index(url) {
+	show_status("Downloading ["+url+"]...")
 	var time_dl_start_ms = performance.now()
 
-	index_code = await networking.get(name)
+	index_code = await networking.get(url)
 	if (index_code === null) return
 
 	show_status("Download complete; parsing the index...")
@@ -2331,7 +2345,7 @@ async function download_index() {
 }
 
 function show_search_prompt() {
-	note.ui.set_body("<p>Index is ready now; here should be the search</p>")
+	note.ui.set_body("")
 
 	note.search_field = add("input", note.ui.body)
 	note.search_field.placeholder = "Search..."
@@ -2443,6 +2457,12 @@ body:`Need to write some comments about:
 `,
 creation_date:1611669194920,
 modification_date:1611669194920
+},
+{
+title:`Warning`,
+body:`Very half-baked software ahead. <i>There are bugs.</i>`,
+creation_date:1611675231500,
+modification_date:1611675231500
 }]
 
 </script>
