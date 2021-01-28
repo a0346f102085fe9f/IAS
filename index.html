@@ -2312,7 +2312,17 @@ function show_index_download_prompt() {
 
 	var indexes = []
 
-	indexes.push( {title: "Full Anonymous directory index, 53.3M", url: "index_a.js"} )
+	indexes.push( {title: "Index A 	53.3M 	Full Anonymous directory index.", 								url: "index_a.js"} )
+	indexes.push( {title: "Index B 	46.2M 	The 5 largest directories, full of non-pony crap.",	 			url: "index_b.js"} )
+	indexes.push( {title: "Index C 	46.1M 	Next 25 directories.",	 										url: "index_c.js"} )
+	indexes.push( {title: "Index D 	47.4M 	Next 45 directories.",	 										url: "index_d.js"} )
+	indexes.push( {title: "Index E 	49.1M 	Next 65 directories.",	 										url: "index_e.js"} )
+	indexes.push( {title: "Index F 	48.5M 	Next 95 directories.",	 										url: "index_f.js"} )
+	indexes.push( {title: "Index G 	49.9M 	Next 140 directories.",	 										url: "index_g.js"} )
+	indexes.push( {title: "Index H 	49.3M 	Next 195 directories.",	 										url: "index_h.js"} )
+	indexes.push( {title: "Index I 	49.7M 	Next 340 directories.",	 										url: "index_i.js"} )
+	indexes.push( {title: "Index J 	49.3M 	Next 670 directories.",	 										url: "index_j.js"} )
+	indexes.push( {title: "Index K 	32.0M 	Next 1826 directories.",	 									url: "index_k.js"} )
 
 	for (var i = 0; i < indexes.length; i++) {
 		var index = indexes[i]
@@ -2320,6 +2330,8 @@ function show_index_download_prompt() {
 		var button = add("button", note.ui.body)
 		button.innerText = index.title
 		button.onclick = function() { download_index(index.url) }
+
+		add("br", note.ui.body)
 	}
 
 }
