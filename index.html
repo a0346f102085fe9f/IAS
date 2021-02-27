@@ -26,7 +26,7 @@ ias.locale = function() {
 	//
 	// ==============================================================================
 	
-	this.date_format = "en-US"
+	this.date_format = undefined
 	this.date_options = {year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "numeric"}
 
 	this.note_missing = "A note with this title does not yet exist. Use the Create button to create it!"
@@ -56,14 +56,15 @@ ias.core = function() {
 	// Each note is an object that features a set of fields;
 	// Most importantly:
 	// - Title
-	// - Creation date
-	// - Modification date
-	// - Body
+	// - Text
+	// - Created
+	// - Modified
 	//
-	// There's also a set of secondary fields:
-	// - System Note Flag [Hides the note from the usual search]
-	// - List of tags [Just an array of tags]
-	// - Remote URL [If the body is stored elsewhere]
+	// There's also a set of secondary, optional fields:
+	// - System Note Flag 	[Hides the note from the usual search]
+	// - List of tags 		[Just an array of tags]
+	// - Execute As 		[Either "App" or a "Process"]
+	// - Remote URL 		[If the body is stored elsewhere]
 	//
 	// Really you can add any field you need, but these are reserved
 	//
@@ -95,7 +96,7 @@ ias.core = function() {
 	// Note storage
 	// WARNING: reveal_pointers() needs to be called again if one of the variables is ever reassigned!
 	//
-	// notes	[id => note_object] 	always sorted modification_date ASCENDING
+	// notes	[id => note_object] 	always sorted note.modified ASCENDING
 	// titles	{note_title => id}		not sorted
 	var notes = []
 	var titles = {}
@@ -116,10 +117,10 @@ ias.core = function() {
 			return null
 		}
 		
-		note.title = title
-		note.body = ""
-		note.creation_date = Date.now()
-		note.modification_date = Date.now()
+		note.title 		= title
+		note.text 		= ""
+		note.created 	= Date.now()
+		note.modified 	= Date.now()
 		
 		var id = notes.push(note) - 1
 		titles[title] = id
@@ -196,7 +197,7 @@ ias.core = function() {
 			return " --- REMOTE --- "
 		}
 
-		return note.body
+		return note.text
 	}
 
 	// Set the note text only
@@ -209,7 +210,7 @@ ias.core = function() {
 			return
 		}
 
-		note.body = text
+		note.text = text
 
 		this.float_to_bottom(title)
 		this.fire_alert("note_altered", title)
@@ -416,7 +417,7 @@ ias.bootloader = function() {
 		navbar.init()
 		dropdown.init()
 
-		story.open_note("Warning")
+		story.open_note("Welcome")
 		story.open_note("Search")
 
 		// Check whether the URL is clean of anchors
@@ -592,7 +593,44 @@ ias.utils = function() {
 		statusbox.classList.add("hide")
 	}
 
-	// Get a formatted time string
+	// https://stackoverflow.com/a/34278578
+	utils.insert_at_cursor = function(text, element) {
+		var start = element.selectionStart
+		var end = element.selectionEnd
+		
+		element.setRangeText(text, start, end, 'end');
+	}
+
+	// Parse a YYYYMMDDHHMMSSmmm TiddlyWiki-style timestamp into a millisecond Unix timestamp
+	utils.parse_note_timestamp = function(note_timestamp) {
+		var str = note_timestamp.toString()
+
+		var year 	= parseInt( str.slice( 0,  4) )
+		var month 	= parseInt( str.slice( 4,  6) ) - 1
+		var day 	= parseInt( str.slice( 6,  8) )
+		var hour 	= parseInt( str.slice( 8, 10) )
+		var minute 	= parseInt( str.slice(10, 12) )
+		var second 	= parseInt( str.slice(12, 14) )
+		var ms 		= parseInt( str.slice(14, 17) )
+
+		return Date.UTC(year, month, day, hour, minute, second, ms)
+	}
+
+	// Convert Unix millisecond timestamp into a YYYYMMDDHHMMSSmmm format
+	utils.make_note_timestamp = function(timestamp) {
+		var date = new Date(timestamp)
+
+		var year 	= ( date.getUTCFullYear() 		).toString()
+		var month 	= ( date.getUTCMonth() + 1		).toString().padStart(2, "0")
+		var day 	= ( date.getUTCDate()			).toString().padStart(2, "0")
+		var hour 	= ( date.getUTCHours() 			).toString().padStart(2, "0")
+		var minute 	= ( date.getUTCMinutes() 		).toString().padStart(2, "0")
+		var second 	= ( date.getUTCSeconds() 		).toString().padStart(2, "0")
+		var ms 		= ( date.getUTCMilliseconds()	).toString()
+
+		return year+month+day+hour+minute+second+ms
+	}
+
 	// Converts supplied timestamp to local format
 	utils.format_time = function(timestamp) {
 		return new Date(timestamp).toLocaleString(locale.date_format, locale.date_options)
@@ -850,12 +888,10 @@ ias.story = function() {
 		// Set up CSS classes
 		note.ui.header.classList.add("note_header")
 		note.ui.editor.classList.add("note_editor")
-		note.ui.title.classList.add("title")
-		note.ui.tools.classList.add("tools")
-		note.ui.date.classList.add("date")
+		note.ui.title.classList.add("note_title")
+		note.ui.tools.classList.add("note_tools")
+		note.ui.date.classList.add("note_date")
 		note.ui.body.classList.add("note_body")
-
-		note.ui.buttons.classList.add("toolbar")
 
 		note.ui.menu_root.classList.add("dropdown_root")
 		note.ui.menu.classList.add("dropdown", "hide")
@@ -867,9 +903,32 @@ ias.story = function() {
 		// STAGE 2: Title and Body functions
 		//
 
-		note.ui.editor.oninput = function() {
+		// A taste of the upcoming rewrite
+		note.api = {}
+
+		// Enable/disable wrapping in the editor
+		function disable_wrap() { note.ui.editor.style.whiteSpace = "pre" }
+		function enable_wrap() { note.ui.editor.style.whiteSpace = "pre-wrap" }
+
+		note.api.disable_wrap = disable_wrap
+		note.api.enable_wrap = enable_wrap
+
+		// Handle tab keypresses
+		// Kills the undo stack unfortunately
+		function editor_keydown(event) {
+			if (event.key === "Tab") {
+				event.preventDefault()
+				utils.insert_at_cursor("\t", this)
+			}
+		}
+
+		// Adjust the editor height on input
+		function editor_resize(event) {
 			note.ui.editor.style.height = note.ui.editor.scrollHeight + "px"
 		}
+
+		note.ui.editor.onkeydown = editor_keydown
+		note.ui.editor.oninput = editor_resize
 
 		note.ui.title.onkeypress = function() {
 			if (event.key === "Enter") {
@@ -1028,7 +1087,7 @@ ias.story = function() {
 			note.ui.title.contentEditable = true
 
 			note.ui.editor.hidden = false
-			note.ui.editor.style.height = note.ui.editor.scrollHeight + "px"
+			note.ui.editor.style.height = "calc(" + note.ui.editor.scrollHeight + "px + 1em)"
 			note.ui.body.hidden = true
 
 			// Focus editor if doing so will not cause the page to scroll
@@ -1173,11 +1232,14 @@ ias.story = function() {
 					note.ui.set_date("") // Apps don't show a date by default
 					note.ui.set_body("")
 
+					// On notes with code disable editor wrap by default
+					note.api.disable_wrap()
+
 					var run = new AsyncFunction("note", text)
 					run(note)
 				}
 			} else {
-				note.ui.set_date(utils.format_time(note.info.modification_date))
+				note.ui.set_date(utils.format_time(note.info.modified))
 				note.ui.set_body(text) // Markdown goes here
 			}
 
@@ -1412,21 +1474,24 @@ ias.networking = function() {
 	}
 
 	// Download some data using GET
-	this.get = async function(address) {
-		try {
-			var response = await fetch(address)
-		} catch (err) {
-			error(locale.network_error)
-			return null
+	this.get = function(address, callback_ready, callback_progress) {
+		var xhr = new XMLHttpRequest();
+
+		xhr.onload = function() {
+			callback_ready(xhr.response)
 		}
 
-		if (response.status === 200) {
-			var text_response = await response.text()
-			return text_response
-		} else {
-		    error(locale.server_error + "<hr>" + locale.error_code + response.status + "<br>" + locale.address + address)
-			return null
+		xhr.onprogress = function(event) {
+			show_status("Downloading [" + address + "]: <br><progress max=" + event.total + " value=" + event.loaded + "></progress>")
 		}
+
+		xhr.onerror = function() {
+			error(locale.network_error)
+		}
+
+		xhr.responseType = "text"
+		xhr.open('GET', address, true);
+		xhr.send(null);
 	}
 	// ==============================================================================
 }
@@ -1588,7 +1653,7 @@ ias.search = function() {
 		var matches = []
 
 		core.for_each_note( function(note) {
-			if (note.body.toLowerCase().includes(pattern))
+			if (note.text.toLowerCase().includes(pattern))
 				matches.push(note.title)
 		} )
 
@@ -1838,7 +1903,7 @@ ias.search = function() {
 			core.for_each_note(function(note) {
 				// Use documentCount to generate IDs
 				// Store direct references in _documents
-				temp_ref.add({id: gid, a: note.body}, {note: note})
+				temp_ref.add({id: gid, a: note.text}, {note: note})
 				gid++
 			})
 
@@ -1855,38 +1920,6 @@ ias.search = function() {
 		})
 		
 		log("Complete!")
-	}
-
-	// Initialize lunr with pre-baked inverted index
-	search.init_lunr_from_prebaked = function() {
-		log("Lunr prebaked init")
-
-		// All of the stuff should've already been set
-		// Except search.idx._documents and gid
-		// Manually bitbang some more stuff into existence
-		search.idx._documents = {}
-
-		var len = search.idx.documentCount
-
-		for (var i = 0; i < len; i++) {
-			var title = search.idx.id_to_filename[i]
-
-			// Can't fetch from poneb.in...
-			// Let's simply link then
-			var paste_id = (title.slice(title.lastIndexOf("-") + 1)).slice(0, -4)
-			var link = "https://poneb.in/" + paste_id
-
-			var note = core.create_note(title)
-			note.body = "Open at poneb.in: <a href=\""+link+"\">"+link+"</a>\n\nThe pastes here... they are too hot for GitHub.\n\nCan't fetch from poneb.in directly because `Access-Control-Allow-Origin: *` header missing.\n\nEven though you see no text, More -> \"Find similar notes\" button still functions as intended!"
-
-			search.idx._documents[i] = {note: note}
-		}
-
-		search.idx.gid = len
-
-		search.reinit_lunr()
-
-		log("All OK")
 	}
 
 	// Delete a single note from the indices without regenerating them completely
@@ -1950,7 +1983,7 @@ ias.search = function() {
 
 			var note = core.get_note_reference(title)
 
-			this.add({id: search.idx.gid, a: note.body}, {note: note})
+			this.add({id: search.idx.gid, a: note.text}, {note: note})
 			search.idx.gid++
 
 			// Backwards-sync integer variables
@@ -2018,18 +2051,53 @@ ias.search = function() {
 	// Only steps 1a and 1b remain
 	// This matches what is used in the native indexer
 	search.partial_stemmer = (function(){
-		var c = "[^aeiou]",          // consonant
+		var step2list = {
+		      "ational" : "ate",
+		      "tional" : "tion",
+		      "enci" : "ence",
+		      "anci" : "ance",
+		      "izer" : "ize",
+		      "bli" : "ble",
+		      "alli" : "al",
+		      "entli" : "ent",
+		      "eli" : "e",
+		      "ousli" : "ous",
+		      "ization" : "ize",
+		      "ation" : "ate",
+		      "ator" : "ate",
+		      "alism" : "al",
+		      "iveness" : "ive",
+		      "fulness" : "ful",
+		      "ousness" : "ous",
+		      "aliti" : "al",
+		      "iviti" : "ive",
+		      "biliti" : "ble"
+		    },
+
+		    step3list = {
+		      "icate" : "ic",
+		      "ative" : "",
+		      "alize" : "al",
+		      "iciti" : "ic",
+		      "ical" : "ic",
+		      "ful" : "",
+		      "ness" : ""
+		    },
+
+			c = "[^aeiou]",          // consonant
 			v = "[aeiouy]",          // vowel
 			C = c + "[^aeiouy]*",    // consonant sequence
 			V = v + "[aeiou]*",      // vowel sequence
 
-			mgr0 = "^(" + C + ")?" + V + C,               // [C]VC... is m>0
-			meq1 = "^(" + C + ")?" + V + C + "(" + V + ")?$",  // [C]VC[V] is m=1
-			mgr1 = "^(" + C + ")?" + V + C + V + C,       // [C]VCVC... is m>1
-			s_v = "^(" + C + ")?" + v;                   // vowel in stem
+			mgr0 = "^(" + C + ")?" + V + C,						// [C]VC... is m>0
+			meq1 = "^(" + C + ")?" + V + C + "(" + V + ")?$",	// [C]VC[V] is m=1
+			mgr1 = "^(" + C + ")?" + V + C + V + C,				// [C]VCVC... is m>1
+			mgr2 = "^(" + C + ")?" + V + C + V + C + V + C,		// [C]VCVCVC... is m>2
+			s_v = "^(" + C + ")?" + v;							// vowel in stem
 
 		var re_mgr0 = new RegExp(mgr0);
 		var re_mgr1 = new RegExp(mgr1);
+		var re_mgr2 = new RegExp(mgr2);
 		var re_meq1 = new RegExp(meq1);
 		var re_s_v = new RegExp(s_v);
 
@@ -2041,6 +2109,13 @@ ias.search = function() {
 		var re2_1b_2 = /(at|bl|iz)$/;
 		var re3_1b_2 = new RegExp("([^aeiouylsz])\\1$");
 		var re4_1b_2 = new RegExp("^" + C + v + "[^aeiouwxy]$");
+
+		var re_1c = /^(.+?[^aeiou])y$/;
+		var re_2 = /^(.+?)(ational|tional|enci|anci|izer|bli|alli|entli|eli|ousli|ization|ation|ator|alism|iveness|fulness|ousness|aliti|iviti|biliti)$/;
+
+		var re_3 = /^(.+?)(icate|ative|alize|iciti|ical|ful|ness)$/;
+
+		var re_4 = /^(.+?)(ance|ence|able|ible|ment|iti|ive)$/;
 
 
 		var porterStemmer = function porterStemmer(w) {
@@ -2092,6 +2167,60 @@ ias.search = function() {
 			  }
 			}
 
+		    // Step 1c - replace suffix y or Y by i if preceded by a non-vowel which is not the first letter of the word (so cry -> cri, by -> by, say -> say)
+		    re = re_1c;
+		    if (re.test(w)) {
+		      var fp = re.exec(w);
+		      stem = fp[1];
+		      w = stem + "i";
+		    }
+
+		    // Step 2
+		    re = re_2;
+		    if (re.test(w)) {
+		      var fp = re.exec(w);
+		      stem = fp[1];
+		      suffix = fp[2];
+		      re = re_mgr0;
+		      if (re.test(stem)) {
+		        w = stem + step2list[suffix];
+		      }
+		    }
+
+		    // Step 3
+		    re = re_3;
+		    if (re.test(w)) {
+		      var fp = re.exec(w);
+		      stem = fp[1];
+		      suffix = fp[2];
+		      re = re_mgr0;
+		      if (re.test(stem)) {
+		        w = stem + step3list[suffix];
+		      }
+		    }
+
+		    // Step 4
+/*		    re = re_4;
+			if (re.test(w)) {
+				var fp = re.exec(w);
+      			stem = fp[1];
+      			suffix = fp[2];
+      			if (suffix === "iti") {
+      				re = re_mgr2;
+      			} else {
+      				re = re_mgr1;
+      			}
+      			if (re.test(stem)) {
+      				w = stem;
+      			}
+			}
+*/
+			// Restore_Y
+			re = re_mgr0;
+			if (re.test(w)) {
+				w = w.replace(/i$/, "y")
+			}
+
 			if (firstch == "y") {
 			  w = firstch.toLowerCase() + w.substr(1);
 			}
@@ -2116,7 +2245,7 @@ ias.search = function() {
 //
 window.ias_cold_storage = [{
 title:`minicon`,
-body:`
+text:`
 var q_sel = note.ui.body.q_sel // Alias
 
 var con_htmlcode =
@@ -2171,13 +2300,13 @@ function start_blinker(console) {
 	
 	setInterval(console.blinker_func, 250)
 }`,
-creation_date:1609225937327,
-modification_date:1609225937327,
+created:1609225937327,
+modified:1609225937327,
 execute:`app`
 },
 {
 title:`Programming guide`,
-body:`IAS features two application layers:
+text:`IAS features two application layers:
 1. API Servers
 2. Userspace Apps
 
@@ -2236,12 +2365,12 @@ app(123)
 The app will now have access to a variable \`variable_1\`, which will contain the number 123.
 
 It is encouraged that you write your Userspace Apps in such a way that multiple copies can run in parralel.`,
-creation_date:1609225934547,
-modification_date:1609501864421
+created:1609225934547,
+modified:1609501864421
 },
 {
 title:`List of all notes`,
-body:`
+text:`
 
 // Perform initial update
 update_list()
@@ -2266,13 +2395,13 @@ function update_list() {
 function make_link(title) {
 	return \`<a class="internal" href="#\${title}" onclick="story.open_note('\${title}', '\${note.info.title}'); return false;">\${title}</a>\`
 }`,
-creation_date:1609225934547,
-modification_date:1609225934547,
+created:1609225934547,
+modified:1609225934547,
 execute:`app`
 },
 {
 title:`Programming guide: alert functions`,
-body:`IAS features several //alert functions// that can be used by [[Userspace Apps]]. Here's the full list:
+text:`IAS features several //alert functions// that can be used by [[Userspace Apps]]. Here's the full list:
  - note_altered				Triggered when some note was altered
  - note_renamed				Triggered when some note was renamed
  - note_deleted				Triggered when some note was deleted
@@ -2285,39 +2414,158 @@ note.alerts.note_deleted = function(cause) { log("Time to update!") }
 \`\`\`
 
 Take a look at the \`alert_all_notes()\` of the "ias_ui" API server to see how alerts are invoked. Try searching the entire source code for calls to that function to find the places that post various alerts.`,
-creation_date:1609838210065,
-modification_date:1609838210065
+created:1609838210065,
+modified:1609838210065
 },
 {
 title:`Export all notes`,
-body:`
+text:`
 if (confirm("Download all notes as .json file?")) {
 	networking.download(core.cold_storage_snapshot(), "ias_notes.json")
 }`,
-creation_date:1610375972182,
-modification_date:1610375972182,
+created:1610375972182,
+modified:1610375972182,
 execute:`process`
 },
 {
 title:`Programming guide: search`,
-body:`Need to write some comments about:
+text:`Need to write some comments about:
 1. How search initializes and reinitializes
 2. Indices present
 3. How live deletion/insertion unfolds
 4. How apps can utilize the search
 `,
-creation_date:1611669194920,
-modification_date:1611669194920
+created:1611669194920,
+modified:1611669194920
 },
 {
-title:`Warning`,
-body:`Very half-baked software ahead. <i>There are bugs.</i>`,
-creation_date:1611675231500,
-modification_date:1611675231500
+title:`Import notes`,
+text:`
+var imported = 0
+var updated = 0
+
+var drop_area = add("div", note.ui.body)
+
+drop_area.classList.add("drag_and_drop_area")
+drop_area.innerHTML = "Drop here..."
+
+var file_tip = add("div", note.ui.body)
+file_tip.innerText = "Or pick files if you're on mobile: "
+
+var file_input = add("input", file_tip)
+file_input.type = "file"
+
+window.ondragenter = function() {
+	event.preventDefault()
+	drop_area.classList.add("attenting")
+}
+
+window.ondragexit = function() {
+	event.preventDefault()
+	drop_area.classList.remove("attenting")
+}
+
+window.ondragover = function() {
+	event.preventDefault()
+}
+
+drop_area.ondragenter = function() {
+	event.preventDefault()
+	drop_area.classList.add("ready")
+}
+
+drop_area.ondragexit = function() {
+	event.preventDefault()
+	drop_area.classList.remove("ready")
+}
+
+drop_area.ondragover = function() {
+	event.preventDefault()
+}
+
+drop_area.ondrop = function() {
+	event.preventDefault()
+	drop_area.classList.remove("attenting")
+	drop_area.classList.remove("ready")
+
+	handle_files(event.dataTransfer.files)
+}
+
+file_input.oninput = function() {
+	event.preventDefault()
+	drop_area.classList.remove("attenting")
+
+	handle_files(file_input.files)
+	file_input.value = ""
+}
+
+// Takes a FileList
+function handle_files(files) {
+	imported = 0
+	updated = 0
+
+	for (var file of files) {
+		import_file(file)
+	}
+}
+
+async function import_file(file) {
+	var text = await file.text()
+
+	// A bit of a security nightmare, this
+	var obj_fn = new Function("return " + text)
+	var obj = obj_fn()
+
+	// Complain if the object is not an object
+	if (typeof(obj) !== "object") {
+		alert("Import: file [" + file.name + "] did not evaluate into an object.")
+	}
+
+	// Array check
+	if (Array.isArray(obj)) {
+		for (var note of obj) {
+			import_note(note)
+		}
+	} else {
+		import_note(obj)
+	}
+}
+
+function import_note(imported_note) {
+	var title = imported_note.title
+
+	if ( core.note_exists(title) ) {
+		var note = core.get_note_reference(title)
+		var proceed = confirm("Note ["+title+"] already exists.\\nExisting timestamp: "+note.modified+"\\nImported timestamp: "+imported_note.modified+"\\n\\nReplace existing?")
+
+		if (proceed === false) {
+			return
+		}
+
+		updated++
+	} else {
+		var note = core.create_note(title)
+		imported++
+	}
+
+	// Copy the fields
+	for (var field of Object.keys(imported_note)) {
+		note[field] = imported_note[field]
+	}
+
+	// Convert YYYYMMDDHHMMSSmmm timestamps into classic Unix timestamps
+	if (typeof(note.created) === "string") note.created = utils.parse_note_timestamp(note.created)
+	if (typeof(note.modified) === "string") note.modified = utils.parse_note_timestamp(note.modified)
+
+	success("Imported " + imported + " notes<br>Updated " + updated + " notes")
+}`,
+created:1612277030569,
+modified:1612277030569,
+execute:`app`
 },
 {
 title:`Search`,
-body:`
+text:`
 if ("lunr" in search) {
 	show_search_prompt()
 } else {
@@ -2329,17 +2577,17 @@ function show_index_download_prompt() {
 
 	var indexes = []
 
-	indexes.push( {title: "Index A 	53.3M 	Full Anonymous directory index.", 								url: "idx/index_a.js"} )
-	indexes.push( {title: "Index B 	46.2M 	The 5 largest directories, full of non-pony crap.",	 			url: "idx/index_b.js"} )
-	indexes.push( {title: "Index C 	46.1M 	Next 25 directories.",	 										url: "idx/index_c.js"} )
-	indexes.push( {title: "Index D 	47.4M 	Next 45 directories.",	 										url: "idx/index_d.js"} )
-	indexes.push( {title: "Index E 	49.1M 	Next 65 directories.",	 										url: "idx/index_e.js"} )
-	indexes.push( {title: "Index F 	48.5M 	Next 95 directories.",	 										url: "idx/index_f.js"} )
-	indexes.push( {title: "Index G 	49.9M 	Next 140 directories.",	 										url: "idx/index_g.js"} )
-	indexes.push( {title: "Index H 	49.3M 	Next 195 directories.",	 										url: "idx/index_h.js"} )
-	indexes.push( {title: "Index I 	49.7M 	Next 340 directories.",	 										url: "idx/index_i.js"} )
-	indexes.push( {title: "Index J 	49.3M 	Next 670 directories.",	 										url: "idx/index_j.js"} )
-	indexes.push( {title: "Index K 	32.0M 	Next 1826 directories.",	 									url: "idx/index_k.js"} )
+	indexes.push( {title: "Index A 	65.4M 	Full Anonymous directory index.", 								url: "idx/index_a.json"} )
+	indexes.push( {title: "Index B 	56.8M 	The 5 largest directories, full of non-pony crap.",	 					url: "idx/index_b.json"} )
+	indexes.push( {title: "Index C 	56.5M 	Next 25 directories.",	 										url: "idx/index_c.json"} )
+	indexes.push( {title: "Index D 	58.0M 	Next 45 directories.",	 										url: "idx/index_d.json"} )
+	indexes.push( {title: "Index E 	60.3M 	Next 65 directories.",	 										url: "idx/index_e.json"} )
+	indexes.push( {title: "Index F 	59.5M 	Next 95 directories.",	 										url: "idx/index_f.json"} )
+	indexes.push( {title: "Index G 	61.3M 	Next 140 directories.",	 										url: "idx/index_g.json"} )
+	indexes.push( {title: "Index H 	60.8M 	Next 195 directories.",	 										url: "idx/index_h.json"} )
+	indexes.push( {title: "Index I 	61.2M 	Next 340 directories.",	 										url: "idx/index_i.json"} )
+	indexes.push( {title: "Index J 	60.9M 	Next 670 directories.",	 										url: "idx/index_j.json"} )
+	indexes.push( {title: "Index K 	39.7M 	Next 1826 directories.",	 										url: "idx/index_k.json"} )
 
 	for (var i = 0; i < indexes.length; i++) {
 		var index = indexes[i]
@@ -2359,23 +2607,59 @@ function handle_click(event) {
 }
 
 async function download_index(url) {
+	// Install the search initialization function
+	search.init_lunr_from_prebaked = function() {
+		log("Lunr prebaked init")
+
+		// All of the stuff should've already been set
+		// Except search.idx._documents and gid
+		// Manually bitbang some more stuff into existence
+		search.idx._documents = {}
+
+		var len = search.idx.documentCount
+
+		for (var i = 0; i < len; i++) {
+			var title = search.idx.id_to_filename[i]
+
+			// Can't fetch from poneb.in...
+			// Let's simply link then
+			var paste_id = (title.slice(title.lastIndexOf("-") + 1)).slice(0, -4)
+			var link = "https://poneb.in/" + paste_id
+
+			var note = core.create_note(title)
+			note.text = "Open at poneb.in: <a href=\\""+link+"\\">"+link+"</a>\\n\\nThe pastes here... they are too hot for GitHub.\\n\\nCan't fetch from poneb.in directly because \`Access-Control-Allow-Origin: *\` header missing.\\n\\nEven though you see no text, More -> \\"Find similar notes\\" button still functions as intended!"
+
+			search.idx._documents[i] = {note: note}
+		}
+
+		search.idx.gid = len
+
+		search.reinit_lunr()
+
+		log("All OK")
+	}
+
+
 	show_status("Downloading ["+url+"]...")
 	var time_dl_start_ms = performance.now()
 
-	index_code = await networking.get(url)
-	if (index_code === null) return
+	networking.get(url, dl_complete)
 
-	show_status("Download complete; parsing the index...")
-	var time_dl_done_ms = performance.now()
+	function dl_complete(data) {
+		show_status("Download complete; parsing the index...")
+		var time_dl_done_ms = performance.now()
 
-	var index_fn = new AsyncFunction(index_code)
-	await index_fn()
+		search.idx = JSON.parse(data)
+		search.init_lunr_from_prebaked()
 
-	var time_idx_eval_ms = performance.now()
+		show_status("Parsing complete; generating secondary and tertiary indices...")
+		var time_idx_eval_ms = performance.now()
 
-	success("Index installed!<br>" + (time_dl_done_ms - time_dl_start_ms) + "ms to download<br>" + (time_idx_eval_ms - time_dl_done_ms) + "ms to evaluate")
+		success("Index installed!<br>" + (time_dl_done_ms - time_dl_start_ms) + "ms to download<br>" + (time_idx_eval_ms - time_dl_done_ms) + "ms to evaluate")
 
-	show_search_prompt()
+		show_search_prompt()
+	}
+
 }
 
 function show_search_prompt() {
@@ -2435,7 +2719,7 @@ function handle_input() {
 function run_search() {
 	var query = note.search_field.value
 	var unsafe_rxp_1 = /\\B\\*\\B/g // Detect stray *
-	var unsafe_rxp_2 = /[~+-]$/g // Detect stray +/-/~
+	var unsafe_rxp_2 = /[~^+-]$/g // Detect stray +/-/^/~
 
 	var unsafe = unsafe_rxp_1.test(query) || unsafe_rxp_2.test(query)
 
@@ -2469,7 +2753,7 @@ function format_results(lunr_output) {
 		html += "</ul>"
 	}
 
-	html += "<hr>Prefix words with <kbd>-</kbd> to disallow them, prefix words with <kbd>+</kbd> to make them required. Use <kbd>*</kbd> for unknown letters. Add <kbd>~1</kbd> after the word for fuzzy search with a distance of 1."
+	html += "<hr>Prefix words with <kbd>-</kbd> to disallow them, prefix words with <kbd>+</kbd> to make them required. Use <kbd>*</kbd> for unknown letters. Add <kbd>^10</kbd> after the word to multiply the importance by 10, add <kbd>~1</kbd> for fuzzy search with a distance of 1."
 
 	return html
 }
@@ -2477,9 +2761,148 @@ function format_results(lunr_output) {
 function make_entry(title, tags) {
 	return \`<li class="search_result">\${utils.display_title(title, note.info.title)}<ul><li>\${utils.display_tags(tags)}</li></ul></li>\`
 }`,
-creation_date:1610984355543,
-modification_date:1610984355543,
+created:1610984355543,
+modified:1610984355543,
 execute:`app`
+},
+{
+title:`Updates`,
+text:`February 28, 2021: [ IAS Rollup Update 1 ]
+
+Highlights:
+ - There is now a download progress bar
+ - Search: expose the <kbd>^</kbd> boost postfix
+ - Indexer: stemmer improvements
+	* Steps 1abc, 2 and 3 now implemented
+	* Fixed some previously undiscovered bugs
+	* Fixed "poni" and "technologi"
+	* 2% decrease in size
+ - Indexer: index format was converted to proper JSON, loaded with JSON.parse()
+	* Loads much faster
+	* No RAM spikes
+	* Allows unicode and stuff
+	* 26% increase in size... additional syntax really bloats it
+ - Indexer: the <kbd>'</kbd> symbol is allowed now
+	* Allows to discern between \`luna\` and \`luna's\`.
+	* 1% increase in size
+
+Other:
+ - Note fields are now closer to what's in TiddlyWiki, allowing some interchangeability
+ - Note importing, both IAS format and TiddlyWiki format
+ - Support for <kbd>Tab</kbd> key in the editor
+ - Fixes to automatic editor resize
+ - Wrap toggle in the editor (Not exposed for now)
+ 
+<table>
+	<tr>
+		<th></th>
+		<th>Directories</th>
+		<th>Documents</th>
+		<th>Size v1.0</th>
+		<th>Size v1.1</th>
+	</tr>
+	<tr>
+		<td>Index A</td>
+		<td>1</td>
+		<td>6337</td>
+		<td>53.3M</td>
+		<td>65.4M</td>
+	</tr>
+	<tr>
+		<td>Index B</td>
+		<td>5</td>
+		<td>3908</td>
+		<td>46.2M</td>
+		<td>56.8M</td>
+	</tr>
+	<tr>
+		<td>Index C</td>
+		<td>25</td>
+		<td>3218</td>
+		<td>46.1M</td>
+		<td>56.5M</td>
+	</tr>
+	<tr>
+		<td>Index D</td>
+		<td>45</td>
+		<td>3360</td>
+		<td>47.4M</td>
+		<td>58.0M</td>
+	</tr>
+	<tr>
+		<td>Index E</td>
+		<td>65</td>
+		<td>4426</td>
+		<td>49.1M</td>
+		<td>60.3M</td>
+	</tr>
+	<tr>
+		<td>Index F</td>
+		<td>95</td>
+		<td>5590</td>
+		<td>48.5M</td>
+		<td>59.5M</td>
+	</tr>
+	<tr>
+		<td>Index G</td>
+		<td>140</td>
+		<td>4618</td>
+		<td>49.9M</td>
+		<td>61.3M</td>
+	</tr>
+	<tr>
+		<td>Index H</td>
+		<td>195</td>
+		<td>5545</td>
+		<td>49.3M</td>
+		<td>60.8M</td>
+	</tr>
+	<tr>
+		<td>Index I</td>
+		<td>340</td>
+		<td>5319</td>
+		<td>49.7M</td>
+		<td>61.2M</td>
+	</tr>
+	<tr>
+		<td>Index J</td>
+		<td>670</td>
+		<td>6270</td>
+		<td>49.3M</td>
+		<td>60.9M</td>
+	</tr>
+	<tr>
+		<td>Index K</td>
+		<td>1826</td>
+		<td>5493</td>
+		<td>32.0M</td>
+		<td>39.7M</td>
+	</tr>
+</table>
+
+January 26, 2021: [ Initial release ]
+`,
+created:1614426404343,
+modified:1614426404343
+},
+{
+title:`IAS`,
+text:`Hello!
+
+Information Assistance System, or IAS for short, is a system for data storage and organization.
+
+A fusion of a note-taking application, recommender system and a JavaScript scratchpad. A brain extension free from the cloud.
+
+I hope it can find a place in your heart and in your self-hosted infrastructure.`,
+created:1614267744062,
+modified:1614267744062
+},
+{
+title:`Welcome`,
+text:`Very half-baked software ahead. <i>There are bugs.</i>
+<hr><a class="internal" href="https://github.com/a0346f102085fe9f/IAS/">GitHub</a> / <a class="internal" href="#Updates" onclick="story.open_note('Updates'); return false;">Updates</a> / <a class="internal" href="#IAS" onclick="story.open_note('IAS'); return false;">IAS</a>`,
+created:1611675231500,
+modified:1611675231500
 }]
 
 </script>
