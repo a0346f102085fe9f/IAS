@@ -224,9 +224,24 @@ button.alert:hover {
 	background: linear-gradient(#fe8019 0%, #3c3836 50%);
 }
 
-progress {
+.progress {
 	background-color: #202020;
+	min-height: .1em;
 	width: 100%;
+	
+	text-align: center;
+	position: relative;
+}
+
+.progress .bar {
+	height: 100%;
+	width: 0%;
+	
+	background-color: #ff8001;
+	mix-blend-mode: difference;
+	
+	position: absolute;
+	left: 0px;
 }
 
 ::-webkit-progress-value {

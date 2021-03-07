@@ -676,6 +676,44 @@ ias.utils = function() {
 
 		return "<span class=\"tag tg-" + tag.replace(rxp_unsafe, "") + "\">" + tag + "</span>"
 	}
+
+	// DIY map with fixed number of slots and growing insertion cutoff
+	utils.sortedmap = function(slots) {
+		var sm = {}
+
+		var cutoff = 0
+		var map = {}
+		var len = 0
+
+		// Insert a value - object pair
+		sm.insert = function(value, object) {
+			if (value > cutoff) {
+
+				if (len < slots) {
+					len++
+				} else {
+					var min = cutoff 
+
+					for (var i_value in map)
+						if (i_value < min) min = i_value
+
+					delete map[min]
+				}
+
+				map[value] = object
+				cutoff = value
+			}
+		}
+
+		// Print out the map
+		sm.log = function() {
+			log(map)
+		}
+
+		sm.map = map
+
+		return sm
+	}
 	// ==============================================================================
 }
 
@@ -1474,23 +1512,37 @@ ias.networking = function() {
 	}
 
 	// Download some data using GET
-	this.get = function(address, callback_ready, callback_progress) {
+	// Available types:
+	//		text 		Just give the text
+	// 		json 		Parse as JSON while skipping the string conversion step
+	// 		blob 		Do not parse or attempt to read as string, just give the data. Appears to be broken on mobile chromium.
+	//
+	// Chromium will fail quietly on very large JSON
+	// There's also a way to make it fail loudly:
+	// - Download as a blob
+	// - Construct a blob URL
+	// - Give blob URL to Fetch
+	// - Attempt to call response.json()
+	//
+	// It will crash.
+	this.get = function(address, callback_ready, type = "text") {
 		var xhr = new XMLHttpRequest();
 
-		xhr.onload = function() {
+		xhr.onload = async function() {
 			callback_ready(xhr.response)
 		}
 
 		xhr.onprogress = function(event) {
-			show_status("Downloading [" + address + "]: <br><progress max=" + event.total + " value=" + event.loaded + "></progress>")
+			show_status("Downloading [" + address + "]: <br><div class=progress><div class=bar style='width: " + (event.loaded / event.total * 100) + "%;'></div>" + Math.round(event.loaded / 1024) + "KB</div>")
 		}
 
-		xhr.onerror = function() {
+		xhr.onerror = function(event) {
 			error(locale.network_error)
 		}
 
-		xhr.responseType = "text"
 		xhr.open('GET', address, true);
+		//xhr.overrideMimeType("application/json");
+		xhr.responseType = type
 		xhr.send(null);
 	}
 	// ==============================================================================
@@ -1815,6 +1867,19 @@ ias.search = function() {
 		}
 
 		log(prev.toString().replaceAll(",", " --> ") + " --> " + term + next.toString().replaceAll(",", " --> "))
+	}
+
+	// Discover the most common terms amongst all documents
+	search.lunr_find_most_common = function(number) {
+		var terms = Object.keys(search.lunr.invertedIndex)
+		var sm = utils.sortedmap(number)
+
+		for (var term of terms) {
+			var count = Object.keys( search.lunr.invertedIndex[term]["a"] ).length
+			sm.insert(count, term)
+		}
+
+		sm.log()
 	}
 
 	// Re-initialize lunr from .idx object
@@ -2439,6 +2504,13 @@ created:1611669194920,
 modified:1611669194920
 },
 {
+title:`Welcome`,
+text:`Very half-baked software ahead. <i>There are bugs.</i>
+<hr><a class="internal" href="https://github.com/a0346f102085fe9f/IAS/">GitHub</a> / <a class="internal" href="#Updates" onclick="story.open_note('Updates'); return false;">Updates</a> / <a class="internal" href="#IAS" onclick="story.open_note('IAS'); return false;">IAS</a>`,
+created:1611675231500,
+modified:1611675231500
+},
+{
 title:`Import notes`,
 text:`
 var imported = 0
@@ -2564,6 +2636,18 @@ modified:1612277030569,
 execute:`app`
 },
 {
+title:`IAS`,
+text:`Hello!
+
+Information Assistance System, or IAS for short, is a system for data storage and organization.
+
+A fusion of a note-taking application, recommender system and a JavaScript scratchpad. A brain extension free from the cloud.
+
+I hope it can find a place in your heart and in your self-hosted infrastructure.`,
+created:1614267744062,
+modified:1614267744062
+},
+{
 title:`Search`,
 text:`
 if ("lunr" in search) {
@@ -2588,11 +2672,13 @@ function show_index_download_prompt() {
 	indexes.push( {title: "Index I 	61.2M 	Next 340 directories.",	 										url: "idx/index_i.json"} )
 	indexes.push( {title: "Index J 	60.9M 	Next 670 directories.",	 										url: "idx/index_j.json"} )
 	indexes.push( {title: "Index K 	39.7M 	Next 1826 directories.",	 										url: "idx/index_k.json"} )
+	indexes.push( {title: "The Pile 	777.0M 	All of the above.\\n\\t\\t\\t\\tNo stemming.\\n\\t\\t\\t\\tStored on IPFS.\\n\\t\\t\\t\\tNeeds 6.5GB of RAM\\n\\t\\t\\t\\tCrashes chromium-based browsers.", url: "https://gateway.ipfs.io/ipfs/QmYKnbVVwuCC2MDaxnikgZf4Xk12h6gjQquy6DkhJNa1Lo/the_pile.json"} )
 
 	for (var i = 0; i < indexes.length; i++) {
 		var index = indexes[i]
 
 		var button = add("button", note.ui.body)
+		button.style.textAlign = "start"
 		button.innerText = index.title
 		button.index_url = index.url
 		button.onclick = handle_click
@@ -2607,6 +2693,7 @@ function handle_click(event) {
 }
 
 async function download_index(url) {
+
 	// Install the search initialization function
 	search.init_lunr_from_prebaked = function() {
 		log("Lunr prebaked init")
@@ -2634,8 +2721,58 @@ async function download_index(url) {
 
 		search.idx.gid = len
 
-		search.reinit_lunr()
+		
+		var enable_stemmer = true
 
+		// Very special handling for The Pile
+		if (url.endsWith("the_pile.json"))
+			enable_stemmer = false
+
+
+		// Nuke if exists
+		delete search.lunr
+
+		search.lunr = lunr(function () {
+			// Reset the default pipelines
+			this.pipeline.reset()
+			this.searchPipeline.reset()
+
+			// Then set them up again, either with or without the stemmer
+			if (enable_stemmer) {
+				this.pipeline.add(
+					lunr.trimmer,
+					lunr.stopWordFilter,
+					search.partial_stemmer
+				)
+
+				this.searchPipeline.add(
+					search.partial_stemmer
+				)
+			} else {
+				this.pipeline.add(
+					lunr.trimmer,
+					lunr.stopWordFilter
+				)
+
+				//this.searchPipeline.add()
+			}
+
+
+
+			// Only one field to index
+			// Shortest possible name to use less RAM
+			this.field('a')
+			this.ref('id')
+
+			this.invertedIndex 			= search.idx.invertedIndex
+			this.fieldTermFrequencies 	= search.idx.fieldTermFrequencies
+			this.fieldLengths 			= search.idx.fieldLengths
+			this._documents 			= search.idx._documents
+			this.documentCount 			= search.idx.documentCount
+			this.termIndex 				= search.idx.termIndex
+		})
+
+		log("Complete!")
 		log("All OK")
 	}
 
@@ -2643,19 +2780,18 @@ async function download_index(url) {
 	show_status("Downloading ["+url+"]...")
 	var time_dl_start_ms = performance.now()
 
-	networking.get(url, dl_complete)
+	networking.get(url, dl_complete, "json")
 
-	function dl_complete(data) {
-		show_status("Download complete; parsing the index...")
+	function dl_complete(idx) {
 		var time_dl_done_ms = performance.now()
+		show_status("Download and parsing complete; generating secondary and tertiary indices...")
 
-		search.idx = JSON.parse(data)
+		search.idx = idx
 		search.init_lunr_from_prebaked()
 
-		show_status("Parsing complete; generating secondary and tertiary indices...")
-		var time_idx_eval_ms = performance.now()
+		var time_init_ok_ms = performance.now()
 
-		success("Index installed!<br>" + (time_dl_done_ms - time_dl_start_ms) + "ms to download<br>" + (time_idx_eval_ms - time_dl_done_ms) + "ms to evaluate")
+		success("Index installed!<br>" + (time_dl_done_ms - time_dl_start_ms) + "ms to download and parse<br>" + (time_init_ok_ms - time_dl_done_ms) + "ms to initialize lunr")
 
 		show_search_prompt()
 	}
@@ -2767,7 +2903,24 @@ execute:`app`
 },
 {
 title:`Updates`,
-text:`February 28, 2021: [ IAS Rollup Update 1 ]
+text:`> March 7, 2021: [ The Pile Update ]
+
+Highlights:
+ - Add a gigantic all-encompassing index, along with the infrastructure required to load it
+	* No stemming, all words preserved as-is
+	* Weighs 777MB
+	* Does not work in chromium-based browsers; either fails silently or crashes <a href="https://github.com/chromium/chromium/blob/cc1cde9919f8eaa2e28e6ed61654a67bbf04c89e/third_party/blink/renderer/platform/wtf/allocator/partition_allocator.h#L32">right here</a>. Digging further, this allocator appears to have a hard limit of 2^31 bytes, <a href="https://github.com/chromium/chromium/blob/cc1cde9919f8eaa2e28e6ed61654a67bbf04c89e/base/allocator/partition_allocator/partition_alloc_constants.h#L259">declared here.</a> Sure enough, there's someone <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=416284">complaining about RAM limits in chromium</a>, although it looks like I may be hitting a different bug here.
+	* Stored on IPFS
+	* Please consider self-hosting to avoid torturing IPFS gateways:
+		- Download <a href="https://github.com/a0346f102085fe9f/IAS/archive/master.zip">IAS</a> and <a href="https://gateway.ipfs.io/ipfs/QmYKnbVVwuCC2MDaxnikgZf4Xk12h6gjQquy6DkhJNa1Lo/the_pile.json">The Pile</a> itself
+		- Place <kbd>the_pile.json</kbd> into <kbd>idx/</kbd>
+		- Run <kbd>index.html</kbd> in Firefox
+
+Other:
+ - Show kilobytes downloaded in the progress bar
+ - Parse JSON at download-time using <kbd>xhr.responseType = "json"</kbd>
+
+> February 28, 2021: [ IAS Rollup Update 1 ]
 
 Highlights:
  - There is now a download progress bar
@@ -2880,29 +3033,10 @@ Other:
 	</tr>
 </table>
 
-January 26, 2021: [ Initial release ]
+> January 26, 2021: [ Initial release ]
 `,
 created:1614426404343,
 modified:1614426404343
-},
-{
-title:`IAS`,
-text:`Hello!
-
-Information Assistance System, or IAS for short, is a system for data storage and organization.
-
-A fusion of a note-taking application, recommender system and a JavaScript scratchpad. A brain extension free from the cloud.
-
-I hope it can find a place in your heart and in your self-hosted infrastructure.`,
-created:1614267744062,
-modified:1614267744062
-},
-{
-title:`Welcome`,
-text:`Very half-baked software ahead. <i>There are bugs.</i>
-<hr><a class="internal" href="https://github.com/a0346f102085fe9f/IAS/">GitHub</a> / <a class="internal" href="#Updates" onclick="story.open_note('Updates'); return false;">Updates</a> / <a class="internal" href="#IAS" onclick="story.open_note('IAS'); return false;">IAS</a>`,
-created:1611675231500,
-modified:1611675231500
 }]
 
 </script>
