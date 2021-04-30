@@ -1,6 +1,8 @@
-<!DOCTYPE html><html><head><meta charset="utf-8"><title>IAS</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="tags.css"></head><body><nav><div class="nav_topbar"><div class="nav_buttons"></div><input type="text" class="nav_search"></div><div class="nav_dropdown"></div></nav><div class="status_area"></div><content><noscript><div class="box"><p>Can't work without JavaScript, unfortunately.</p></div></noscript></content>
-<script src="lunr.js"></script>
+<!DOCTYPE html>
+<!-- IAS -->
 <!-- JUMP TO BOTTOM OF THE FILE TO FIND THE ENTRY POINT -->
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>IAS</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="tags.css"></head><body><nav><div class="nav_topbar"><div class="nav_buttons"></div><input type="text" class="nav_search"></div><div class="nav_dropdown"></div></nav><div class="status_area"></div><content><noscript><div class="box"><p>Can't work without JavaScript, unfortunately.</p></div></noscript></content>
+<script src="lunr.js" type="text/javascript"></script>
 <script>
 "use strict";
 
@@ -42,6 +44,8 @@ ias.locale = function() {
 	this.error_code = "Error code: "
 	this.address = "Address: "
 
+	this.parser_missing = "This note uses an unknown parser: "
+
 	// ==============================================================================
 }
 
@@ -61,10 +65,10 @@ ias.core = function() {
 	// - Modified
 	//
 	// There's also a set of secondary, optional fields:
+	// - Archived Note Flag [Hides the note from the usual search]
 	// - System Note Flag 	[Hides the note from the usual search]
 	// - List of tags 		[Just an array of tags]
-	// - Execute As 		[Either "App" or a "Process"]
-	// - Remote URL 		[If the body is stored elsewhere]
+	// - Parser 			[Either "Markdown", "Text", "App" or a "Process"]
 	//
 	// Really you can add any field you need, but these are reserved
 	//
@@ -77,10 +81,13 @@ ias.core = function() {
 	// - rename_note(title, new_title)
 	// - get_note_reference(title)
 	// - get_note_text(title)
+	// - set_note_text(title, text)
 	// - for_each_note(callback)
 	// - get_oldest_titles(number)
 	// - get_recent_titles(number)
 	// - get_notes_with_field(field, value)
+	// - archive_note(title)
+	// - unarchive_note(title)
 	// - export_note(title, id)
 	// - cold_storage_snapshot()
 	// - cold_storage_restore()
@@ -121,7 +128,8 @@ ias.core = function() {
 		note.text 		= ""
 		note.created 	= Date.now()
 		note.modified 	= Date.now()
-		
+		note.parser 	= "Markdown"
+
 		var id = notes.push(note) - 1
 		titles[title] = id
 
@@ -159,6 +167,7 @@ ias.core = function() {
 
 		note.title = new_title
 		titles[new_title] = id
+		note.modified = Date.now()
 
 		this.fire_alert("note_renamed", title)
 	}
@@ -188,29 +197,18 @@ ias.core = function() {
 	}
 	
 	// Fetch the note text only
-	// * Notes with remote URL may need to be fetched over the network
 	this.get_note_text = function(title) {
 		var note = this.get_note_reference(title)
-
-		if (note.remote_url != undefined) {
-			log("Remote fetch from core not supported. Fetch manually.")
-			return " --- REMOTE --- "
-		}
 
 		return note.text
 	}
 
 	// Set the note text only
-	// * Will refuse to alter remote notes
 	this.set_note_text = function(title, text) {
 		var note = this.get_note_reference(title)
 
-		if (note.remote_url != undefined) {
-			log("Can't alter a remote note!")
-			return
-		}
-
 		note.text = text
+		note.modified = Date.now()
 
 		this.float_to_bottom(title)
 		this.fire_alert("note_altered", title)
@@ -222,6 +220,42 @@ ias.core = function() {
 		for (var note of notes) {
 			if (note != undefined) callback(note)
 		}
+	}
+
+	// Returns an array of titles that match the pattern
+	// * Pattern uses space as a separator
+	// * Case-insensitive
+	this.find_titles = function(pattern, ignore_archived = true) {
+		var note_list = []
+		var bits = pattern.toLowerCase().split(" ")
+
+		for (var title in titles) {
+			var lowercase_title = title.toLowerCase()
+			var nope = false
+
+			for (var bit of bits) {
+				if (lowercase_title.includes(bit) === false) {
+					nope = true
+					break
+				}
+			}
+
+			if (nope) {
+				continue
+			} else {
+				if (ignore_archived) {
+					var note = this.get_note_reference(title)
+
+					if (note.archived) {
+						continue
+					}
+				}
+
+				note_list.push(title)
+			}
+		}
+
+		return note_list
 	}
 
 	// Returns an array no longer than [number]
@@ -274,6 +308,24 @@ ias.core = function() {
 		}
 
 		return note_list
+	}
+
+	this.archive_note = function(title) {
+		var note = this.get_note_reference(title)
+
+		if (!note.archived) {
+			note.archived = true
+			this.fire_alert("note_altered", title)
+		}
+	}
+
+	this.unarchive_note = function(title) {
+		var note = this.get_note_reference(title)
+
+		if (note.archived) {
+			delete note["archived"]
+			this.fire_alert("note_altered", title)
+		}
 	}
 
 	// Export a note by a title or by id
@@ -355,7 +407,7 @@ ias.core = function() {
 	
 	// Needs to be called after restoring from snapshot
 	this.update_title_hashmap = function() {
-		for (var id = 0; id < notes.length; id++) {
+		for (var id = notes.length - 1; id >= 0; id--) {
 			var title = notes[id].title
 			titles[title] = id
 		}
@@ -457,7 +509,7 @@ ias.bootloader = function() {
 
 		var stack_trace = ""
 
-		if (error === undefined) {
+		if (!error) {
 			stack_trace = " --- NO ERROR INFO AVAILABLE --- "
 		} else if ("stack" in error === false) {
 			stack_trace = " --- NO STACK TRACE AVAILABLE --- "
@@ -671,10 +723,15 @@ ias.utils = function() {
 
 	// Format a single tag into a <span> pillow
 	utils.display_tag = function(tag) {
-		// Regular expression to detect symbols not safe to place inside an HTML attribute
-		var rxp_unsafe = /[^\w-]/g
+		// Ignore empty tags
+		if (tag === "")
+			return ""
 
-		return "<span class=\"tag tg-" + tag.replace(rxp_unsafe, "") + "\">" + tag + "</span>"
+		// Regular expression to detect symbols not safe to place inside an HTML attribute
+		var rxp_unsafe = /[^A-Za-zА-Яа-я0-9ёЁ-]/g
+		var safe_tag = tag.replace(rxp_unsafe, "")
+
+		return "<span class=\"tag tg-" + safe_tag + "\">" + tag + "</span>"
 	}
 
 	// DIY map with fixed number of slots and growing insertion cutoff
@@ -748,7 +805,7 @@ ias.story = function() {
 		if (alert === "note_renamed") {
 			delete entries[cause]
 			entries[note.info.title] = note
-			note.ui.set_title(note.info.title)
+			note.set_title(note.info.title)
 		}
 
 		// On deletions, close the note
@@ -776,6 +833,7 @@ ias.story = function() {
 		var note = story.new_empty_note()
 
 		note.info = core.create_note(title)
+		note.info.parser = "Markdown"
 		note.reload()
 		note.edit()
 	}
@@ -784,9 +842,9 @@ ias.story = function() {
 	this.create_temporary_note = function(after = null) {
 		var note = story.new_empty_note(after)
 
-		note.display_temporary_toolbar()
-		note.ui.set_title("<i>Temporary note</i>")
-		note.ui.set_date(utils.format_time( Date.now() ))
+		note.toolbar.display_temporary_toolbar()
+		note.set_title("<i>Temporary note</i>")
+		note.set_date(utils.format_time( Date.now() ))
 
 		return note
 	}
@@ -796,29 +854,28 @@ ias.story = function() {
 	this.new_empty_note = function(after = null) {
 		var note = {}
 
-		note.ui = {}
-		note.ui.box = document.createElement("div")
-		note.ui.box.classList.add("box")
+		note.dom = {}
+		note.dom.box = document.createElement("div")
+		note.dom.box.classList.add("box")
 
 		// If no "after" specified, simply insert the note as a new child in the <content>
 		// Otherwise perform adjacent insertion to the target element
 		if (after === null) {
 			var story_river = q_sel("body content")
-			story_river.appendChild(note.ui.box)
+			story_river.appendChild(note.dom.box)
 		} else {
 			if (after in entries) {
 				var previous_note = entries[after]
-				previous_note.ui.box.insertAdjacentElement("afterend", note.ui.box)
+				previous_note.dom.box.insertAdjacentElement("afterend", note.dom.box)
 			} else {
 				log("Tried to insert a note after ["+after+"] but was unable to find it within the story!")
 				var story_river = q_sel("body content")
-				story_river.appendChild(note.ui.box)
+				story_river.appendChild(note.dom.box)
 			}
 		}
 		
 		// Install the APIs and the HTML structure
-		story.install_note_ui(note)
-		story.install_note_logic(note)
+		story.define_note(note)
 
 		return note
 	}
@@ -836,8 +893,8 @@ ias.story = function() {
 		if (title in entries === true) {
 			var note = entries[title]
 			
-			note.ui.scroll_to()
-			note.ui.blink()
+			note.scroll_to()
+			note.blink()
 
 			return note
 		}
@@ -856,7 +913,7 @@ ias.story = function() {
 
 		// If note is to be executed as a process, we shouldn't create any UIs for it
 		// Just run it async and exit
-		if (info.execute === "process") {
+		if (info.parser === "Process") {
 			var code = core.get_note_text(title)
 			var run = new AsyncFunction(code)
 			run()
@@ -878,13 +935,13 @@ ias.story = function() {
 	this.suggest_note = function(title) {
 		var note = story.new_empty_note()
 
-		note.display_suggestion_toolbar()
+		note.toolbar.display_suggestion_toolbar()
 
-		note.ui.set_title(title.italics())
-		note.ui.set_date(utils.format_time( Date.now() ))
-		note.ui.set_body(locale.note_missing)
+		note.set_title(title.italics())
+		note.set_date(utils.format_time( Date.now() ))
+		note.set_body(locale.note_missing)
 
-		note.ui.scroll_to()
+		note.scroll_to()
 	}
 
 	// Note UI creation and some basic APIs
@@ -897,59 +954,149 @@ ias.story = function() {
 	// - scroll_to()
 	// - blink()
 	// - body.q_sel(selector)
-	// - clear_buttons()
-	// - add_toolbar_button(name, text)
-	// - add_menu_button(name, text)
+	// - editor.disable_wrap()
+	// - editor.enable_wrap()
+	// - toolbar.display_default_toolbar()						TOOLBAR PRESET
+	// - toolbar.display_editing_toolbar()						TOOLBAR PRESET
+	// - toolbar.display_temporary_toolbar()					TOOLBAR PRESET
+	// - toolbar.display_suggestion_toolbar()					TOOLBAR PRESET
+	// - toolbar.add_toolbar_button(name, text)
+	// - toolbar.add_menu_button(name, text)
+	// - toolbar.clear_buttons()
+	// - more()											BUTTON HANDLER
+	// - edit()											BUTTON HANDLER
+	// - close()										BUTTON HANDLER
+	// - delete()										BUTTON HANDLER
+	// - abort()										BUTTON HANDLER
+	// - save()											BUTTON HANDLER
+	// - create()										BUTTON HANDLER
+	// - archive()										BUTTON HANDLER
+	// - unarchive()									BUTTON HANDLER
+	// - reload()
 	//
-	this.install_note_ui = function(note) {
+	this.define_note = function(note) {
+		// STAGE 0: Exports
+
+		// Various top-level stuff
+		note.set_title = set_title
+		note.set_date = set_date
+		note.set_body = set_body
+		note.scroll_to = scroll_to
+		note.blink = blink
+		note.q_sel = q_sel
+
+		// Editor subfolder
+		note.editor = {}
+		note.editor.disable_wrap = disable_wrap
+		note.editor.enable_wrap = enable_wrap
+
+		// Toolbar subfolder
+		note.toolbar = {}
+		note.toolbar.display_default_toolbar = display_default_toolbar
+		note.toolbar.display_editing_toolbar = display_editing_toolbar
+		note.toolbar.display_temporary_toolbar = display_temporary_toolbar
+		note.toolbar.display_suggestion_toolbar = display_suggestion_toolbar
+		note.toolbar.add_toolbar_button = add_toolbar_button
+		note.toolbar.add_menu_button = add_menu_button
+		note.toolbar.clear_buttons = clear_buttons
+
+		note.reload = reload
+
+		// Alert handlers
+		note.alerts = {}
+
 		//
 		// STAGE 1: Structure
 		//
 
-		// Note consist of the header, the body and the (hidden) editor
-		note.ui.header 			= add("div", note.ui.box)
-		note.ui.body 			= add("div", note.ui.box)
-		note.ui.editor			= add("textarea", note.ui.box)
+		// It all starts with a box
+		var box = note.dom.box
 
-		// Header contains the tools, the title and the date
-		note.ui.title 	= add("div", note.ui.header)
-		note.ui.tools 	= add("div", note.ui.header)
-		note.ui.date 	= add("div", note.ui.header)
+		// Note consist of the top, the body and the (hidden) editor
+		var top 		= add("div", box)
+		var body 		= add("div", box)
+		var editor		= add("textarea", box)
+
+		// Top
+		// -> Header
+		//    -> Title
+		//    -> Tools
+		// -> Date
+		var header 		= add("div", top)
+		var title 		= add("div", header)
+		var tools 		= add("div", header)
+		var date 		= add("div", top)
 
 		// Div to store toolbar buttons
-		note.ui.buttons = add("div", note.ui.tools)
+		var buttons 	= add("div", tools)
 
 		// More menu
-		note.ui.menu_root 	= add("div", note.ui.tools)
-		note.ui.menu 		= add("div", note.ui.menu_root)
+		var menu_root 	= add("div", tools)
+		var menu 		= add("div", menu_root)
 
 		// Set up CSS classes
-		note.ui.header.classList.add("note_header")
-		note.ui.editor.classList.add("note_editor")
-		note.ui.title.classList.add("note_title")
-		note.ui.tools.classList.add("note_tools")
-		note.ui.date.classList.add("note_date")
-		note.ui.body.classList.add("note_body")
+		header.classList.add("note_header")
+		editor.classList.add("note_editor")
+		title.classList.add("note_title")
+		tools.classList.add("note_tools")
+		date.classList.add("note_date")
+		body.classList.add("note_body")
 
-		note.ui.menu_root.classList.add("dropdown_root")
-		note.ui.menu.classList.add("dropdown", "hide")
+		menu_root.classList.add("dropdown_root")
+		menu.classList.add("dropdown", "hide")
 
-		// Hide the editor
-		note.ui.editor.hidden = true
+		// Parser selector
+		var parser_selector = add("select", box)
+
+		function add_parser(name, value) { 
+			var option = add("option", parser_selector) 
+			option.innerText = name
+			option.value = value
+		}
+
+		add_parser("Markdown + HTML",		"Markdown"	)
+		add_parser("Plaintext + HTML", 		"Text"		)
+		add_parser("JavaScript / App", 		"App"		)
+		add_parser("JavaScript / Process", 	"Process"	)
+
+		// Hide the editor and type selector
+		parser_selector.hidden = true
+		editor.hidden = true
+
+
+		// Export the DOM
+		note.dom.header 	= header
+		note.dom.body 		= body
+		note.dom.editor 	= editor
+		note.dom.title 		= title
+		note.dom.tools 		= tools
+		note.dom.date 		= date
+		note.dom.buttons 	= buttons
+		note.dom.menu_root 	= menu_root
+		note.dom.menu 		= menu
 
 		//
 		// STAGE 2: Title and Body functions
 		//
 
-		// A taste of the upcoming rewrite
-		note.api = {}
-
 		// Enable/disable wrapping in the editor
-		function disable_wrap() { note.ui.editor.style.whiteSpace = "pre" }
-		function enable_wrap() { note.ui.editor.style.whiteSpace = "pre-wrap" }
+		function disable_wrap() { editor.style.whiteSpace = "pre" }
+		function enable_wrap() { editor.style.whiteSpace = "pre-wrap" }
 
-		note.api.disable_wrap = disable_wrap
-		note.api.enable_wrap = enable_wrap
+		function show_editor() {
+			editor.hidden = false
+			editor.style.height = "calc(" + editor.scrollHeight + "px + 1em)"
+			parser_selector.hidden = false
+			body.hidden = true
+		}
+
+		function hide_editor() {
+			editor.value = ""
+			editor.style.height = ""
+			editor.hidden = true
+			parser_selector.hidden = true
+			body.hidden = false
+		}
 
 		// Handle tab keypresses
 		// Kills the undo stack unfortunately
@@ -962,37 +1109,37 @@ ias.story = function() {
 
 		// Adjust the editor height on input
 		function editor_resize(event) {
-			note.ui.editor.style.height = note.ui.editor.scrollHeight + "px"
+			editor.style.height = editor.scrollHeight + "px"
 		}
 
-		note.ui.editor.onkeydown = editor_keydown
-		note.ui.editor.oninput = editor_resize
+		editor.onkeydown = editor_keydown
+		editor.oninput = editor_resize
 
-		note.ui.title.onkeypress = function() {
+		title.onkeypress = function() {
 			if (event.key === "Enter") {
 				event.preventDefault()
 			}
 		}
 
-		note.ui.set_title = function(title) { note.ui.title.innerHTML 	= title }
-		note.ui.set_date = function(date) 	{ note.ui.date.innerHTML 	= date }
-		note.ui.set_body = function(text) 	{ note.ui.body.innerHTML 	= text }
+		function set_title(text) 	{ title.innerHTML 	= text }
+		function set_date(text) 	{ date.innerHTML 	= text }
+		function set_body(text) 	{ body.innerHTML 	= text }
 
-		note.ui.scroll_to = function() {
-			note.ui.box.scrollIntoView({behavior: "smooth", block: "nearest"})
+		function scroll_to() {
+			note.dom.box.scrollIntoView({behavior: "smooth", block: "nearest"})
 		}
 
-		note.ui.blink = function() {
-			note.ui.box.classList.add("attention")
-			setTimeout(note.ui.unblink, 50)
+		function blink() {
+			note.dom.box.classList.add("attention")
+			setTimeout(unblink, 50)
 		}
 
-		note.ui.unblink = function() {
-			note.ui.box.classList.remove("attention")
+		function unblink() {
+			note.dom.box.classList.remove("attention")
 		}
 
-		note.ui.body.q_sel = function(selector) {
-			return note.ui.body.querySelector(selector)
+		function q_sel(selector) {
+			return body.querySelector(selector)
 		}
 		
 		//
@@ -1003,7 +1150,7 @@ ias.story = function() {
 		note.buttons = {}
 
 		// Removes all buttons from the toolbar and the menu
-		note.ui.clear_buttons = function() {
+		function clear_buttons() {
 			for (var name in note.buttons) {
 				note.buttons[name].delete_button()
 			}
@@ -1011,7 +1158,7 @@ ias.story = function() {
 
 		// Add a button
 		// Requires the note to have a handler function with a matching name
-		note.ui.add_button = function(name, text, parent) {
+		function add_button(name, text, parent) {
 			// 1. Create a button
 			note.buttons[name] = add("button", parent)
 
@@ -1038,250 +1185,262 @@ ias.story = function() {
 		// Helpers to add:
 		// 1. A toolbar button
 		// 2. A menu button
-		note.ui.add_toolbar_button 	= function(name, text) { note.ui.add_button(name, text, note.ui.buttons) }
-		note.ui.add_menu_button 	= function(name, text) { note.ui.add_button(name, text, note.ui.menu) }
-	}
-
-	// Higher-level note logic
-	//
-	// List of APIs:
-	// - display_default_toolbar()
-	// - display_editing_toolbar()
-	// - display_suggestion_toolbar()
-	// - more()								BUTTON HANDLER
-	// - edit()								BUTTON HANDLER
-	// - close()							BUTTON HANDLER
-	// - delete()							BUTTON HANDLER
-	// - abort()							BUTTON HANDLER
-	// - save()								BUTTON HANDLER
-	// - create()							BUTTON HANDLER
-	// - reload()
-	this.install_note_logic = function(note) {
-		// Alert handlers
-		note.alerts = {}
+		function add_toolbar_button(name, text) { add_button(name, text, buttons) }
+		function add_menu_button(name, text) 	{ add_button(name, text, menu) }
 
 		// Default toolbar
 		// Tools feature the "close", "edit" and "more" buttons (At least for this pathfinder version)
-		note.display_default_toolbar = function() {
-			note.ui.clear_buttons()
+		function display_default_toolbar() {
+			clear_buttons()
 
-			note.ui.add_toolbar_button("more", "More")
-			note.ui.add_toolbar_button("edit", "Edit")
-			note.ui.add_toolbar_button("close", "Close")
+			add_toolbar_button("more", "More")
+			add_toolbar_button("edit", "Edit")
+			add_toolbar_button("close", "Close")
 
-			note.ui.add_menu_button("find_similar", "Find similar notes")
-			note.ui.add_menu_button("export", "Export note")
+			add_menu_button("find_similar", "Find similar notes")
+			add_menu_button("export", "Export note")
+
+			if (note.info.archived) {
+				add_menu_button("unarchive", "Unarchive note")
+			} else {
+				add_menu_button("archive", "Archive note")
+			}
 		}
 
 		// Editing toolbar
 		// Tools feature the "delete", "abort" and "save" buttons
-		note.display_editing_toolbar = function() {
-			note.ui.clear_buttons()
+		function display_editing_toolbar() {
+			clear_buttons()
 
-			note.ui.add_toolbar_button("delete", "Delete")
-			note.ui.add_toolbar_button("abort", "Abort")
-			note.ui.add_toolbar_button("save", "Save")
+			add_toolbar_button("delete", "Delete")
+			add_toolbar_button("abort", "Abort")
+			add_toolbar_button("save", "Save")
 		}
 
 		// Temporary note toolbar
 		// Only the "close" button
-		note.display_temporary_toolbar = function() {
-			note.ui.clear_buttons()
+		function display_temporary_toolbar() {
+			clear_buttons()
 
-			note.ui.add_toolbar_button("close", "Close")
+			add_toolbar_button("close", "Close")
 		}
 
 		// Suggested note toolbar
 		// "Create" and "close" buttons
-		note.display_suggestion_toolbar = function() {
-			note.ui.clear_buttons()
+		function display_suggestion_toolbar() {
+			clear_buttons()
 
-			note.ui.add_toolbar_button("create", "Create")
-			note.ui.add_toolbar_button("close", "Close")
+			add_toolbar_button("create", "Create")
+			add_toolbar_button("close", "Close")
 		}
 
 		//
 		// STAGE 4: Button handlers
 		//
+		define_button_handlers()
 
-		// Close the note
-		note.close = function() { 
-			note.ui.box.remove()
+		function define_button_handlers() {
+			// Close the note
+			note.close = function() { 
+				note.dom.box.remove()
 
-			if ("info" in note) {
-				delete entries[note.info.title]
-			}
-		}
-
-		// Enter editing mode
-		note.edit = function() { 
-			note.display_editing_toolbar() 
-
-			// Pull the unprocessed text (pre-markdown or pre-execution)
-			var raw_text = core.get_note_text(note.info.title)
-			note.ui.editor.value = raw_text
-
-			note.ui.title.classList.add("editing")
-			note.ui.title.contentEditable = true
-
-			note.ui.editor.hidden = false
-			note.ui.editor.style.height = "calc(" + note.ui.editor.scrollHeight + "px + 1em)"
-			note.ui.body.hidden = true
-
-			// Focus editor if doing so will not cause the page to scroll
-			if (stretches_beyond_viewport(note.ui.editor) === false) {
-				note.ui.editor.focus()
-			}
-		}
-
-		// Display more buttons
-		note.more = function() { note.ui.menu.classList.toggle("hide") }
-
-
-		// Delete the note
-		note.delete = function() { 
-			var really_delete = confirm("Delete note \"" + note.info.title + "\"\n\nAre you sure?")
-
-			if (really_delete === true) {
-				note.close()
-				core.delete_note(note.info.title)
-			}
-		}
-
-		// Abort editing
-		note.abort = function() { 
-			note.display_default_toolbar()
-
-			note.ui.title.contentEditable = false
-			note.ui.title.classList.remove("editing")
-			note.ui.title.innerText = note.info.title
-			
-			note.ui.editor.value = ""
-			note.ui.editor.style.height = ""
-			note.ui.editor.hidden = true
-			note.ui.body.hidden = false
-		}
-
-		// Save edits
-		note.save = function() {
-			// Harvest the text
-			var text = note.ui.editor.value
-
-			// Harvest the title (old and new)
-			var old_title = note.info.title
-			var new_title = note.ui.title.innerText.trim()
-
-			// Hide the editor
-			note.abort()
-
-			// Check whether the title was altered
-			// If it was, call the rename function
-			// alert_all_notes() will update the story
-			if (old_title != new_title) {
-				core.rename_note(old_title, new_title)
-			}
-			
-			// Update the contents
-			// Should trigger an automatic reload
-			core.set_note_text(new_title, text)
-		}
-
-		// Create button on suggested notes
-		note.create = function() { 
-			var title = note.ui.title.innerText
-
-			note.info = core.create_note(title)
-
-			note.reload()
-			note.edit()
-		}
-
-		// Find similar notes
-		note.find_similar = function() { 
-			var results = search.lunr_find_similar(note.info.title)
-
-			var results_note = story.create_temporary_note(note.info.title)
-			var htmlcode = ""
-			var len = results.length
-
-			// Display the self-similarity first and foremost
-			var entry = results[0]
-			htmlcode += "Self-similarity: " + entry.score
-
-			htmlcode += "<ul>"
-
-			for (var i = 1; i < len; i++) {
-				var entry = results[i]
-				htmlcode += "<li>" + utils.display_title(entry.title, note.info.title) + "<br>Similarity: " + entry.score + "<br>Tags: " + utils.display_tags(entry.tags) + "</li>\n" 
+				if ("info" in note) {
+					delete entries[note.info.title]
+				}
 			}
 
-			htmlcode += "</ul>"
+			// Enter editing mode
+			note.edit = function() { 
+				display_editing_toolbar() 
 
-			results_note.ui.set_title("<i>Find similar: " + note.info.title + "</i>")
-			results_note.ui.set_body(htmlcode)
-			results_note.ui.scroll_to()
-		}
+				// Pull the unprocessed text (pre-markdown or pre-execution)
+				var raw_text = core.get_note_text(note.info.title)
+				editor.value = raw_text
 
-		// Export this note in particular
-		note.export = function() {
-			networking.download(core.export_note(note.info.title), note.info.title + ".jsbit")
+				title.classList.add("editing")
+				title.contentEditable = true
+
+				parser_selector.value = note.info.parser
+
+				show_editor()
+
+				// Focus editor if doing so will not cause the page to scroll
+				if (stretches_beyond_viewport(editor) === false) {
+					editor.focus()
+				}
+			}
+
+			// Display more buttons
+			note.more = function() { menu.classList.toggle("hide") }
+
+			// Delete the note
+			note.delete = function() { 
+				var really_delete = confirm("Delete note \"" + note.info.title + "\"\n\nAre you sure?")
+
+				if (really_delete === true) {
+					note.close()
+					core.delete_note(note.info.title)
+				}
+			}
+
+			// Abort editing
+			note.abort = function() { 
+				display_default_toolbar()
+
+				title.contentEditable = false
+				title.classList.remove("editing")
+				title.innerText = note.info.title
+				
+				hide_editor()
+			}
+
+			// Save edits
+			note.save = function() {
+				// Harvest the text
+				var text = editor.value
+
+				// Harvest the title (old and new)
+				var old_title = note.info.title
+				var new_title = title.innerText.trim()
+
+				// Hide the editor
+				note.abort()
+
+				// Check whether the title was altered
+				// If it was, call the rename function
+				// alert_all_notes() will update the story
+				if (old_title != new_title) {
+					core.rename_note(old_title, new_title)
+				}
+
+				// Update the parser
+				// Take some liberties with altering note fields directly
+				// We call set_note_text() regardless, so whatever
+				note.info.parser = parser_selector.value
+				
+				// Update the contents
+				// Should trigger an automatic reload
+				core.set_note_text(new_title, text)
+			}
+
+			// Create button on suggested notes
+			note.create = function() { 
+				var title_text = title.innerText
+
+				note.info = core.create_note(title_text)
+				reload()
+				note.edit()
+			}
+
+			// Find similar notes
+			note.find_similar = function() { 
+				var results = search.lunr_find_similar(note.info.title)
+
+				var results_note = story.create_temporary_note(note.info.title)
+				var htmlcode = ""
+				var len = results.length
+
+				// Display the self-similarity first and foremost
+				var entry = results[0]
+				htmlcode += "Self-similarity: " + entry.score
+
+				for (var i = 1; i < len; i++) {
+					var entry = results[i]
+					var tags = search.lunr_auto_tags(entry.title)
+
+					htmlcode += "<div class=\"search_result\"><div>▶ " + utils.display_title(entry.title, note.info.title) + "</div><div>Similarity: " + entry.score + "</div><div>Tags: " + utils.display_tags(tags) + "</div></div>" 
+				}
+
+				results_note.set_title("<i>Find similar: " + note.info.title + "</i>")
+				results_note.set_body(htmlcode)
+				results_note.scroll_to()
+			}
+
+			// Export this note in particular
+			note.export = function() {
+				networking.download(core.export_note(note.info.title), note.info.title + ".jsbit")
+			}
+
+			note.archive = function() {
+				core.archive_note(note.info.title)
+			}
+
+			note.unarchive = function() {
+				core.unarchive_note(note.info.title)
+			}
 		}
 
 		// Reload function 
 		// Text notes: 	fetch the text, parse it as markdown and display it
 		// App notes: 	fetch the text and run it
-		note.reload = async function() {
+		async function reload() {
 			var title = note.info.title
 
 			log("Reloading [" + title + "]")
 
 			// Display the default toolbar
-			note.display_default_toolbar()
+			display_default_toolbar()
 
 			// Update the note UI title
-			note.ui.set_title(title)
+			set_title(title)
 
 			// Update the story entry
 			entries[title] = note
 
-			// Fetch the text/code
-			// Remotely if needed
-			var text = ""
+			var parsers = {
+				"Markdown": markdown_parser,
+				"Text": text_parser,
+				"App": app_loader
+			}
 
-			if ("remote_url" in note.info) {
-				var url = note.info.remote_url
+			// Missing parser security check
+			var target_parser = note.info.parser
 
-				note.ui.set_body(" --- REMOTE FETCH IN PROGRESS --- ")
-				show_status("Downloading [" + url + "]...")
+			if (target_parser in parsers === false) {
+				alert(locale.parser_missing + target_parser)
+				target_parser = "Text" // Fall back to plaintext parser
+			}
 
-				text = await networking.get(url)
+			// Execute the parser
+			parsers[target_parser]()
 
-				if (text === null) {
-					text = " --- REMOTE FETCH FAILURE --- "
+			// Scroll to the note at last
+			scroll_to()
+
+			
+			// And below are the parser functions
+			// =======================================================
+			function markdown_parser() {
+				if (note.info.archived) {
+					set_date( utils.format_time(note.info.modified) + "; Archived")
 				} else {
-					success("Downloading [" + url + "]...OK")
+					set_date( utils.format_time(note.info.modified) )
 				}
-			} else {
-				text = core.get_note_text(title)
+
+				set_body( markdown.parse(note.info.text, null, note.info.title) )
 			}
 
-			if ("execute" in note.info) {
-				if (note.info.execute === "app") {
-					note.ui.set_date("") // Apps don't show a date by default
-					note.ui.set_body("")
-
-					// On notes with code disable editor wrap by default
-					note.api.disable_wrap()
-
-					var run = new AsyncFunction("note", text)
-					run(note)
+			function text_parser() {
+				if (note.info.archived) {
+					set_date( utils.format_time(note.info.modified) + "; Archived")
+				} else {
+					set_date( utils.format_time(note.info.modified) )
 				}
-			} else {
-				note.ui.set_date(utils.format_time(note.info.modified))
-				note.ui.set_body(text) // Markdown goes here
+				
+				set_body( note.info.text )
 			}
 
-			note.ui.scroll_to()
+			function app_loader() {
+				set_date("") // Apps don't show a date by default
+				set_body("")
+
+				// On notes with code disable editor wrap by default
+				disable_wrap()
+
+				var run = new AsyncFunction("note", note.info.text)
+				run(note)
+			}
+			// =======================================================
 		}
 
 	}
@@ -1356,7 +1515,7 @@ ias.navbar = function() {
 	}
 
 	navbar.handlers.create_new_note = 	function() { story.create_new_note() }
-	navbar.handlers.open_settings = 	function() { alert("UNIMP") }
+	navbar.handlers.open_settings = 	function() { story.open_note("Settings") }
 	navbar.handlers.save = 				function() { singlefile_saver.save() }
 	navbar.handlers.switch_theme = 		function() { alert("UNIMP") }
 	navbar.handlers.toggle_more = 		function() { dropdown.toggle() }
@@ -1451,7 +1610,10 @@ ias.dropdown = function() {
 	dropdown.get_apps = function() {
 		var htmlcode = "<h1>Apps</h1><hr>"
 
-		var titles = core.get_notes_with_field("execute")
+		var apps 		= core.get_notes_with_field("parser", "App")
+		var processes 	= core.get_notes_with_field("parser", "Process")
+
+		var titles = apps.concat(processes)
 		var count = titles.length
 
 		for (var i = 0; i < count; i++) {
@@ -1577,46 +1739,12 @@ ias.singlefile_saver = function() {
 		return "//\n// " + text + "\n//\n"
 	}
 
-	this.js_open = "<script>\n\"use strict\";\n\n"
-	this.js_close = "</" + "script>\n" 
+	var js_open = "<script>\n\"use strict\";\n\n"
+	var js_close = "</" + "script>\n" 
 
-	this.html_template_start = 
-	  "<!DOCTYPE html>"
-	+ "<html>"
-	+ "<head><meta charset=\"utf-8\"><title>IAS</title><link rel=\"stylesheet\" href=\"style.css\"><link rel=\"stylesheet\" href=\"tags.css\"></head>"
-	+ "<body>"
-	+ "<nav><div class=\"nav_topbar\"><div class=\"nav_buttons\"></div><input type=\"text\" class=\"nav_search\"></div><div class=\"nav_dropdown\"></div></nav>"
-	+ "<div class=\"status_area\"></div>"
-	+ "<content>"
-	+ "<noscript><div class=\"box\"><p>Can't work without JavaScript, unfortunately.</p></div></noscript>"
-	+ "</content>\n"
-	+ "<" + "script src=\"lunr.js\"></" + "script>\n"
-	+ "<!-- JUMP TO BOTTOM OF THE FILE TO FIND THE ENTRY POINT -->\n"
-	+ this.js_open
-	+ "// Source object\n"
-	+ "// Stores the source code of the API Servers / components\n"
-	+ "// bootloader.init() will initialize them:\n"
-	+ "// - ias.core -> window.core\n"
-	+ "// - ias.story -> window.story\n"
-	+ "// - ias.locale -> window.locale\n"
-	+ "// - etc...\n"
-	+ "//\n"
-	+ "// Only after initialization can you use them!\n"
-	+ "//\n"
-	+ "var ias = {}\n"
-	+ this.js_close
-	+ "\n"
-
-	this.html_template_end = 
-	  "</body></html>"
-	
-	this.entry_point_template = 
-	  this.js_open
-	+ this.make_banner("IAS entry point")
-	+ "var bootloader = new ias.bootloader()\n"
-	+ "bootloader.init()\n"
-	+ this.js_close
-
+	this.html_template_start = `<!DOCTYPE html>\n<!-- IAS -->\n<!-- JUMP TO BOTTOM OF THE FILE TO FIND THE ENTRY POINT -->\n<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>IAS</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="tags.css"></head><body><nav><div class="nav_topbar"><div class="nav_buttons"></div><input type="text" class="nav_search"></div><div class="nav_dropdown"></div></nav><div class="status_area"></div><content><noscript><div class="box"><p>Can't work without JavaScript, unfortunately.</p></div></noscript></content>\n${"<"}script src="lunr.js" type="text/javascript">${"</"}script>\n${js_open}// Source object\n// Stores the source code of the API Servers / components\n// bootloader.init() will initialize them:\n// - ias.core -> window.core\n// - ias.story -> window.story\n// - ias.locale -> window.locale\n// - etc...\n//\n// Only after initialization can you use them!\n//\nvar ias = {}\n${js_close}\n`
+	this.html_template_end = `</body></html>`
+	this.entry_point_template = `${js_open}${this.make_banner("IAS entry point")}var bootloader = new ias.bootloader()\nbootloader.init()\n${js_close}`
 
 
 	this.save_component = function(name) {
@@ -1640,12 +1768,12 @@ ias.singlefile_saver = function() {
 	this.build_file_text = function() {
 		var result = ""
 
-		result += this.js_open + this.save_all_components() + this.js_close
+		result += js_open + this.save_all_components() + js_close
 
-		result += this.js_open
+		result += js_open
 		result += this.make_banner("IAS cold storage")
 		result += this.save_notes()
-		result += this.js_close
+		result += js_close
 
 		return this.html_template_start + result + this.entry_point_template + this.html_template_end
 	}
@@ -1653,11 +1781,12 @@ ias.singlefile_saver = function() {
 	// Save this copy of IAS as a file
 	this.save = async function() {
 		var protocol = location.protocol
+		var pathname = location.pathname
 
-/*		// For HTTP or HTTPS attempt to save via PUT request
+		// For HTTP or HTTPS attempt to save via PUT request
 		// Otherwise download a copy to the user's machine
 		if (protocol === "http:" || protocol === "https:") {
-			var result = await networking.put(this.build_file_text(), "ias.html")
+			var result = await networking.put(this.build_file_text(), pathname)
 
 			if (result === false) {
 				error(locale.saving_error)
@@ -1666,10 +1795,7 @@ ias.singlefile_saver = function() {
 		} else {
 			alert("Warning! External dependencies.\n\nFollowing files are not integrated into the unified HTML at this time:\n - style.css\n - lunr.js\n\nYou'll need to download them separately and place them next to the .html file.")
 			networking.download(this.build_file_text(), "ias.html")
-		}*/
-
-		alert("Warning! External dependencies.\n\nFollowing files are not integrated into the unified HTML at this time:\n - style.css\n - tags.css\n - lunr.js\n\nYou'll need to download them separately and place them next to the .html file.")
-		networking.download(this.build_file_text(), "ias.html")
+		}
 
 		success(locale.saving_ok)
 		navbar.clear_save_warning()
@@ -1686,25 +1812,15 @@ ias.search = function() {
 	// Alias
 	var search = this
 
-	// Substring search through the titles
-	// Case-insensitive
-	search.search_titles = function(pattern) {
-		var matches = []
-
-		core.for_each_note( function(note) {
-			if (note.title.toLowerCase().includes(pattern))
-				matches.push(note.title)
-		} )
-
-		return matches
-	}
-
 	// Naive full text search
 	// Case-insensitive
-	search.search_text = function(pattern) {
+	search.search_text = function(pattern, ignore_archived = true) {
 		var matches = []
 
 		core.for_each_note( function(note) {
+			if (ignore_archived && note.archived)
+				return
+
 			if (note.text.toLowerCase().includes(pattern))
 				matches.push(note.title)
 		} )
@@ -1712,28 +1828,28 @@ ias.search = function() {
 		return matches
 	}
 
-	search.lunr_search_text = function(text) {
+	search.lunr_search_text = function(text, ignore_archived = true) {
 		// Initialize if no init yet
 		if ("lunr" in search === false) {
 			log("Initializing lunr... please hold on")
 			search.reinit_lunr()
 		}
 
-		var results = search.lunr.search(text)
-		var len = Math.min(10, results.length)
+		var lunr_results = search.lunr.search(text)
+		var matches = []
+		var len = lunr_results.length
 
 		for (var i = 0; i < len; i++) {
-			var id = results[i].ref
+			var id = lunr_results[i].ref
+			var note = search.idx._documents[id].note
 
-			results[i].title = search.idx._documents[id].note.title
-			results[i].tags = search.lunr_auto_tags("a/" + id)
+			if (ignore_archived && note.archived)
+				continue
 
-			//log(results[i].tags, id)
+			matches.push(note.title)
 		}
 
-		//log(results.length, "hits in total. Keep refining your query!")
-
-		return results.slice(0, len)
+		return matches
 	}
 
 	// Calculate inverse document frequency for a term if lunr hidden fields are exposed
@@ -1747,7 +1863,8 @@ ias.search = function() {
 
 	// Attempt to automatically tag a document
 	// Returns 10 top terms
-	search.lunr_auto_tags = function(id) {
+	search.lunr_auto_tags = function(title) {
+		var id = search.idx_find_note_id(title)
 		var tf = search.idx.fieldTermFrequencies[id]
 
 		var distinct_tems = 0
@@ -1813,7 +1930,7 @@ ias.search = function() {
 		var top = []
 
 		// First entry is the self-similarity
-		var self_similarity = {score: Math.round(doc.dot(doc)), title: title, tags: null}
+		var self_similarity = {score: Math.round(doc.dot(doc)), title: title}
 		top.push(self_similarity)
 
 		// Sort through all the results and pick out a top 10
@@ -1831,7 +1948,7 @@ ias.search = function() {
 			}
 
 			var entry_id = id_list[max_id]
-			var entry = {score: Math.round(score_list[max_id]), title: search.idx_get_note_title(entry_id), tags: search.lunr_auto_tags(entry_id) }
+			var entry = {score: Math.round(score_list[max_id]), title: search.idx_get_note_title(entry_id) }
 			score_list[max_id] = 0.0
 
 			top.push( entry )
@@ -1911,7 +2028,7 @@ ias.search = function() {
 
 			// Then set them up again but with our custom stemmer
 			this.pipeline.add(
-				lunr.trimmer,
+				search.unicode_trimmer,
 				lunr.stopWordFilter,
 				search.partial_stemmer
 			)
@@ -1947,7 +2064,7 @@ ias.search = function() {
 			this.searchPipeline.reset()
 
 			this.pipeline.add(
-				lunr.trimmer,
+				search.unicode_trimmer,
 				lunr.stopWordFilter,
 				search.partial_stemmer
 			)
@@ -2027,7 +2144,7 @@ ias.search = function() {
 			this.searchPipeline.reset()
 
 			this.pipeline.add(
-				lunr.trimmer,
+				search.unicode_trimmer,
 				lunr.stopWordFilter,
 				search.partial_stemmer
 			)
@@ -2298,6 +2415,162 @@ ias.search = function() {
 		}
 	})()
 
+	// Lunr trimmer that was updated to work with Russian characters
+	search.unicode_trimmer = function (token) {
+		return token.update(function (s) {
+			return s.replace(/^[^A-Za-zА-Яа-я0-9ёЁ]+/, '').replace(/[^A-Za-zА-Яа-я0-9ёЁ]+$/, '')
+		})
+	}
+
+	// ==============================================================================
+}
+
+ias.markdown = function() {
+	//
+	// IAS markdown parser
+	//
+	// ==============================================================================
+
+	// IAS uses a modified version of snarkdown: 
+	// https://github.com/developit/snarkdown
+	//
+	// The code is baked-in, no external files required
+	//
+
+	//
+	// List of APIs:
+	// - parse(markdown)
+	//
+
+	this.parse = function(md, prevLinks, originNote) {
+		const TAGS = {
+						'_': 	['<i>', '</i>'],
+						'__': 	['<b>', '</b>'],
+						'*': 	['<b>', '</b>'],
+						'**': 	['<i>', '</i>'],
+						'___': 	['<b><i>', '</i></b>'],
+						'***': 	['<b><i>', '</i></b>'],
+						'~~': 	['<s>', '</s>'],
+						// '\n': 	['<br>'],
+						' ': 	['<br>'],
+						'--': 	['<hr>']
+					};
+
+		function outdent(str) {
+			return str.replace(RegExp('^'+(str.match(/^(\t| )+/) || '')[0], 'gm'), '');
+		}
+
+		function encodeAttr(str) {
+			return (str+'').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+		}
+
+		let tokenizer = /((?:^---+|\* \*(?: \*)+)\n)|(?:^``` *(\w*)\n([\s\S]*?)\n```$)|(^(?:([>*+-]|\d+\.)\s+.*\n)+)|(?:!\[([^\]]*?)\]\(([^)]+?)\))|(\[)|(\](?:\(([^)]+?)\))?)|(?:^(#{1,6})\s*(.+)\n)|(?:`([^`].*?)`)|(  \n\n*|\*{1,}|_{1,}|~~)|(<[^>]*>)/gm,
+			context = [],
+			out = '',
+			links = prevLinks || {},
+			last = 0,
+			chunk, prev, token, inner, t;
+
+
+		function tag(token) {
+			let desc = TAGS[token];
+			let end = context[context.length-1] == token;
+			if (!desc) return token;
+			if (!desc[1]) return desc[0];
+			if (end) context.pop();
+			else context.push(token);
+			return desc[end|0];
+		}
+
+		function flush() {
+			let str = '';
+			while (context.length) str += tag(context[context.length-1]);
+			return str;
+		}
+
+		// Handling for reference-style links
+		md = md.replace(/^\[(.+?)\]:\s*(.+)$/gm, (s, name, url) => {
+			links[name] = url;
+			return '';
+		});
+
+		while ( (token=tokenizer.exec(md)) ) {
+			prev = md.substring(last, token.index);
+			last = tokenizer.lastIndex;
+			chunk = token[0];
+			if (prev.match(/[^\\](\\\\)*\\$/)) {
+				// escaped
+			}
+			// Code blocks:
+			else if (t = token[3]) {
+				var language = "";
+
+				// Remove the leading/trailing newline that will likely precede/follow the code within a ``` block
+				var code = encodeAttr(t).replace(/^\n+|\n+$/g, '');
+
+				// Set the language if available
+				if (token[2]) language = "lang-" + token[2];
+				
+				chunk = `<code class="${language}">${code}</code>`;
+			}
+			// > Quotes, -* lists:
+			else if (t = token[5]) {
+				if (t.match(/\./)) {
+					token[4] = token[4].replace(/^\d+/gm, '');
+				}
+				inner = this.parse(outdent(token[4].replace(/^\s*[>*+.-]/gm, '')));
+				if (t=='>') t = 'blockquote';
+				else {
+					t = t.match(/\./) ? 'ol' : 'ul';
+					inner = inner.replace(/^(.*)(\n|$)/gm, '<li>$1</li>');
+				}
+				chunk = '<'+t+'>' + inner + '</'+t+'>';
+			}
+			// Images:
+			else if (token[7]) {
+				chunk = `<img src="${encodeAttr(token[7])}" alt="${encodeAttr(token[6])}">`;
+			}
+			// Links:
+			else if (token[9]) {
+				var onclick_attr = ""
+				var class_attr = ""
+
+				// Try to extract explicit URL / reference URL
+				var url = token[10] || links[prev];
+
+				// Try to make an internal link if no URL specified
+				if (!url) {
+					url = "#" + prev;
+					class_attr = `class="internal"`
+					onclick_attr = `onclick="story.open_note('${prev}', '${originNote}'); return false;"`
+				}
+
+				out = out.replace('<a>', `<a ${class_attr} href="${encodeAttr(url)}" ${onclick_attr}>`);
+				chunk = flush() + '</a>';
+			}
+			else if (token[8]) {
+				chunk = '<a>';
+			}
+			// Headings:
+			else if (token[11]) {
+				t = 'h' + token[11].length;
+				chunk = '<'+t+'>' + this.parse(token[12], links) + '</'+t+'>';
+			}
+			// `code`:
+			else if (token[13]) {
+				chunk = `<code class="inline">${encodeAttr(token[13])}</code>`;
+			}
+			// Inline formatting: *em*, **strong** & friends
+			else if (token[14] || token[1]) {
+				chunk = tag(token[14] || '--');
+			}
+			out += prev;
+			out += chunk;
+		}
+
+		return (out + md.substring(last) + flush()).replace(/^\n+|\n+$/g, '');
+	}
+
 	// ==============================================================================
 }
 
@@ -2311,7 +2584,7 @@ ias.search = function() {
 window.ias_cold_storage = [{
 title:`minicon`,
 text:`
-var q_sel = note.ui.body.q_sel // Alias
+var q_sel = note.q_sel // Alias
 
 var con_htmlcode =
 \`
@@ -2319,7 +2592,7 @@ var con_htmlcode =
 <textarea id="interactive_console_input"></textarea>
 \`
 
-note.ui.set_body(con_htmlcode)
+note.set_body(con_htmlcode)
 
 var display = q_sel("#interactive_console_display")
 var input = q_sel("#interactive_console_input")
@@ -2367,71 +2640,7 @@ function start_blinker(console) {
 }`,
 created:1609225937327,
 modified:1609225937327,
-execute:`app`
-},
-{
-title:`Programming guide`,
-text:`IAS features two application layers:
-1. API Servers
-2. Userspace Apps
-
-API Servers are stored as raw JavaScript code, and Userspace Apps are stored within notes.
-
-# API Servers
-
-Open your browser console and execute \`ias.core.toString()\`
-
-This will print the entire code of the "core" API Server, the one responsible for storing and processing notes. You will notice that the code is wrapped into a function:
-
-\`\`\`
-function() {
-	// ...
-	// ...
-	// ...
-
-	this.API_aaa = function() { ... }
-	this.API_bbb = function() { ... }
-}
-\`\`\`
-
-If you are familiar with JavaScript, you will instantly recognize this as the old-school way to create custom types/classes.
-
-A restart is required after editing the code of an API Server.
-
-Take a look at the code of "ias.bootloader" API Server to see how the boot process unfolds.
-
-# Userspace Apps
-
-Userspace Apps are stored as notes, and thus to see the code of one of the apps you need to take a different approach: \`core.get_note_text("minicon")\`
-
-This should print the string containing the code of the embedded interactive console app. It is stored as a string, so you will notice some escaped characters.
-
-You will see that it's not wrapped into any functions/objects and is more or less written as your usual JavaScript.
-
-Userspace Apps are executed using a Function() constructor. It provides a degree of encapsulation -- you can declare variables and functions inside, and they will not spill over into the outside world.
-
-Here's how you start an app:
-
-\`\`\`
-var app = Function(core.get_note_text("pls_make_new_example"))
-app()
-\`\`\`
-
-Try it!
-
-Question: but can you pass arguments?
-Answer: yes!
-
-\`\`\`
-var app = Function("variable_1", core.get_note_text("pls_make_new_example"))
-app(123)
-\`\`\`
-
-The app will now have access to a variable \`variable_1\`, which will contain the number 123.
-
-It is encouraged that you write your Userspace Apps in such a way that multiple copies can run in parralel.`,
-created:1609225934547,
-modified:1609501864421
+parser:`App`
 },
 {
 title:`List of all notes`,
@@ -2454,7 +2663,7 @@ function update_list() {
 		html_code += make_link(note_list[i]) + "\\n"
 	}
 
-	note.ui.set_body(html_code)
+	note.set_body(html_code)
 }
 
 function make_link(title) {
@@ -2462,25 +2671,7 @@ function make_link(title) {
 }`,
 created:1609225934547,
 modified:1609225934547,
-execute:`app`
-},
-{
-title:`Programming guide: alert functions`,
-text:`IAS features several //alert functions// that can be used by [[Userspace Apps]]. Here's the full list:
- - note_altered				Triggered when some note was altered
- - note_renamed				Triggered when some note was renamed
- - note_deleted				Triggered when some note was deleted
- - ... 						...
-
-
-Here's how an app can hook to an alert function:
-\`\`\`
-note.alerts.note_deleted = function(cause) { log("Time to update!") }
-\`\`\`
-
-Take a look at the \`alert_all_notes()\` of the "ias_ui" API server to see how alerts are invoked. Try searching the entire source code for calls to that function to find the places that post various alerts.`,
-created:1609838210065,
-modified:1609838210065
+parser:`App`
 },
 {
 title:`Export all notes`,
@@ -2490,7 +2681,7 @@ if (confirm("Download all notes as .json file?")) {
 }`,
 created:1610375972182,
 modified:1610375972182,
-execute:`process`
+parser:`Process`
 },
 {
 title:`Programming guide: search`,
@@ -2501,14 +2692,8 @@ text:`Need to write some comments about:
 4. How apps can utilize the search
 `,
 created:1611669194920,
-modified:1611669194920
-},
-{
-title:`Welcome`,
-text:`Very half-baked software ahead. <i>There are bugs.</i>
-<hr><a class="internal" href="https://github.com/a0346f102085fe9f/IAS/">GitHub</a> / <a class="internal" href="#Updates" onclick="story.open_note('Updates'); return false;">Updates</a> / <a class="internal" href="#IAS" onclick="story.open_note('IAS'); return false;">IAS</a>`,
-created:1611675231500,
-modified:1611675231500
+modified:1611669194920,
+parser:`Markdown`
 },
 {
 title:`Import notes`,
@@ -2516,12 +2701,12 @@ text:`
 var imported = 0
 var updated = 0
 
-var drop_area = add("div", note.ui.body)
+var drop_area = add("div", note.dom.body)
 
 drop_area.classList.add("drag_and_drop_area")
 drop_area.innerHTML = "Drop here..."
 
-var file_tip = add("div", note.ui.body)
+var file_tip = add("div", note.dom.body)
 file_tip.innerText = "Or pick files if you're on mobile: "
 
 var file_input = add("input", file_tip)
@@ -2625,6 +2810,11 @@ function import_note(imported_note) {
 		note[field] = imported_note[field]
 	}
 
+	// Switch to the Text parser if no parser was set
+	if ("parser" in note === false) {
+		note.parser = "Text"
+	}
+
 	// Convert YYYYMMDDHHMMSSmmm timestamps into classic Unix timestamps
 	if (typeof(note.created) === "string") note.created = utils.parse_note_timestamp(note.created)
 	if (typeof(note.modified) === "string") note.modified = utils.parse_note_timestamp(note.modified)
@@ -2633,7 +2823,204 @@ function import_note(imported_note) {
 }`,
 created:1612277030569,
 modified:1612277030569,
-execute:`app`
+parser:`App`
+},
+{
+title:`Markdown guide`,
+text:`IAS uses a modified version of the Snarkdown Markdown parser. Below is a brief guide on the available syntax.
+
+Click "Edit" to see the source code.
+
+# Text formatting
+---
+Three font modes are available:
+*Bold*
+**Italics**
+***Bold + Italics*** 
+
+Strike-through mode is available:
+~~Example~~
+~~*Example*~~
+__~~Example~~__
+
+# Code blocks
+---
+Blocks of code can be made with a triple backtick:
+
+\`\`\`
+<script>
+	console.log("Hello World!")
+</${'script'}>
+\`\`\`
+
+There's also \`inline code blocks\` made using a single backtick.
+
+# Links
+---
+Three types of link syntax are available:
+
+Internal link: [Welcome]
+External link: [DuckDuckGo](https://ddg.gg/)
+Reference-style link: [Reference 1]
+
+[Reference 1]: https://arxiv.org
+
+# Tables
+---
+Snarkdown never supported tables, but you can use HTML!
+
+<table>
+	<tr>
+		<th></th>
+		<th>0</th>
+		<th>1</th>
+		<th>2</th>
+		<th>3</th>
+	</tr>
+	<tr>
+		<td>0</td>
+		<td>x</td>
+		<td>6.7</td>
+		<td>31.3</td>
+		<td>31.3</td>
+	</tr>
+	<tr>
+		<td>1</td>
+		<td>6.7</td>
+		<td>x</td>
+		<td>31.0</td>
+		<td>31.0</td>
+	</tr>
+	<tr>
+		<td>2</td>
+		<td>31.3</td>
+		<td>31.0</td>
+		<td>x</td>
+		<td>6.8</td>
+	</tr>
+	<tr>
+		<td>3</td>
+		<td>31.3</td>
+		<td>31.0</td>
+		<td>6.8</td>
+		<td>x</td>
+	</tr>
+</table>
+
+# Images
+---
+Images can be added using \`![Alt text](URL)\` or via an HTML tag.`,
+created:1617529440466,
+modified:1617532884260,
+parser:`Markdown`
+},
+{
+title:`Programming guide: alert functions`,
+text:`IAS features several _alert functions_ that can be used by [Userspace Apps]. Here's the full list:
+ - \`note_altered\`				Triggered when some note was altered
+ - \`note_renamed\`				Triggered when some note was renamed
+ - \`note_deleted\`				Triggered when some note was deleted
+ - ... 						...
+
+
+Here's how an app can hook to an alert function:
+
+\`\`\`
+note.alerts.note_deleted = function(cause) { log("Time to update!") }
+\`\`\`
+
+Take a look at the \`alert_all_notes()\` of the \`ias_ui\` API server to see how alerts are invoked. Try searching the entire source code for calls to that function to find the places that post various alerts.`,
+created:1609838210065,
+modified:1618647085131,
+parser:`Markdown`
+},
+{
+title:`Programming guide`,
+text:`IAS features two application layers:
+1. API Servers
+2. Userspace Apps
+
+API Servers are stored as raw JavaScript code, and Userspace Apps are stored within notes.
+
+# API Servers
+---
+Open your browser console and execute \`ias.core.toString()\`
+
+This will print the entire code of the "core" API Server, the one responsible for storing and processing notes. You will notice that the code is wrapped into a function:
+
+\`\`\`
+function() {
+	// ...
+	// ...
+	// ...
+
+	this.API_aaa = function() { ... }
+	this.API_bbb = function() { ... }
+}
+\`\`\`
+
+If you are familiar with JavaScript, you will instantly recognize this as the old-school way to create custom types/classes.
+
+A restart is required after editing the code of an API Server.
+
+Take a look at the code of "ias.bootloader" API Server to see how the boot process unfolds.
+
+# Userspace Apps
+---
+Userspace Apps are stored as notes, and thus to see the code of one of the apps you need to take a different approach: \`core.get_note_text("minicon")\`
+
+This should print the string containing the code of the embedded interactive console app. It is stored as a string, so you will notice some escaped characters.
+
+You will see that it's not wrapped into any functions/objects and is more or less written as your usual JavaScript.
+
+Userspace Apps are executed using a Function() constructor. It provides a degree of encapsulation -- you can declare variables and functions inside, and they will not spill over into the outside world.
+
+Here's the gist of it:
+
+\`\`\`
+var run = Function("alert('Hello world!')")
+run()
+\`\`\`
+
+Every app has access to a \`note\` variable which provides the app with a way to control its note. Here are some of the APIs:
+
+\`\`\`
+set_body(text)				Set the body
+set_title(text)				Set the title
+set_date(text)				Set the date
+reload()				Reload the note
+scroll_to()				Scroll to the note
+...					...
+\`\`\`
+
+To turn a note into an app, set its parser to "JavaScript / App" in the editor.
+
+Here's a very simple example app:
+
+\`\`\`
+note.set_body("Hello from JavaScript!")
+\`\`\`
+
+Apps can freely use any of the API servers available. Let's use the markdown API server to parse some markdown:
+
+\`\`\`
+var html = markdown.parse("__Hello world!__\\n---\\nMarkdown parser")
+note.set_body(html)
+\`\`\`
+
+Try it!`,
+created:1609225934547,
+modified:1618655797948,
+parser:`Markdown`
+},
+{
+title:`Notes of the Day`,
+text:`--- Notes of the Day go here ---
+---
+[System status] / [List of all notes] / [IAS]`,
+created:1611675231500,
+modified:1618658506006,
+parser:`Markdown`
 },
 {
 title:`IAS`,
@@ -2645,7 +3032,32 @@ A fusion of a note-taking application, recommender system and a JavaScript scrat
 
 I hope it can find a place in your heart and in your self-hosted infrastructure.`,
 created:1614267744062,
-modified:1614267744062
+modified:1614267744062,
+parser:`Markdown`
+},
+{
+title:`Settings`,
+text:`// Introduction
+var introduction = add("div", note.dom.body)
+introduction.innerHTML = "--- Settings go here ---"
+
+// Service
+var service = add("div", note.dom.body)
+service.innerHTML = "<h1>Service</h1><hr>"
+
+var search_idx_reset_button = add("button", service)
+search_idx_reset_button.innerHTML = "Reset search index"
+search_idx_reset_button.onclick = reset_search_idx
+
+function reset_search_idx() {
+	delete search["lunr"]
+	delete search["idx"]
+}
+
+service.innerHTML += " - use this button in the event of index consistency violation"`,
+created:1619092027364,
+modified:1619094022758,
+parser:`App`
 },
 {
 title:`Search`,
@@ -2657,7 +3069,7 @@ if ("lunr" in search) {
 }
 
 function show_index_download_prompt() {
-	note.ui.set_body("<p>The search needs to download one of the indexes to work.</p><p>It can take up to a minute to evaluate an index, depending on your device.</p><p>Click one of the buttons below:</p>")
+	note.set_body("<p>The search needs to download one of the indexes to work.</p><p>It can take up to a minute to evaluate an index, depending on your device.</p><p>Click one of the buttons below:</p>")
 
 	var indexes = []
 
@@ -2677,13 +3089,13 @@ function show_index_download_prompt() {
 	for (var i = 0; i < indexes.length; i++) {
 		var index = indexes[i]
 
-		var button = add("button", note.ui.body)
+		var button = add("button", note.dom.body)
 		button.style.textAlign = "start"
 		button.innerText = index.title
 		button.index_url = index.url
 		button.onclick = handle_click
 
-		add("br", note.ui.body)
+		add("br", note.dom.body)
 	}
 
 }
@@ -2799,13 +3211,13 @@ async function download_index(url) {
 }
 
 function show_search_prompt() {
-	note.ui.set_body("")
+	note.set_body("")
 
-	note.search_field = add("input", note.ui.body)
+	note.search_field = add("input", note.dom.body)
 	note.search_field.placeholder = "Search..."
 	note.search_field.type = "text"
 
-	note.search_results_root = add("div", note.ui.body)
+	note.search_results_root = add("div", note.dom.body)
 	note.search_results = add("div", note.search_results_root)
 
 	note.search_results_root.style.position = "relative"
@@ -2862,31 +3274,56 @@ function run_search() {
 	if (unsafe) {
 		log("Refusing incomplete/unsafe query")
 	} else {
-		var results = search.lunr_search_text(query)
-		note.search_results.innerHTML = format_results(results)
+		var title_matches = core.find_titles(query)
+		var text_matches = search.lunr_search_text(query)
+
+
+		note.search_results.innerHTML = format_results(title_matches, text_matches)
 		show_results()
 	} 
 }
 
-function format_results(lunr_output) {
+function format_results(title_matches, text_matches) {
 	var html = ""
-	var len = lunr_output.length
 
-	log(lunr_output)
+	// Optional but will likely benefit performance
+	title_matches = title_matches.slice(0, 10)
+	text_matches = text_matches.slice(0, 10)
 
-	if (len === 0) {
-		html = "<p>Nothing found...</p>"
-	} else {
-		html += "<ul>"
+	// Title matches come first
+	if (title_matches.length > 0) {
+		var len = Math.min(title_matches.length, 10)
 
 		for (var i = 0; i < len; i++) {
-			var title = lunr_output[i].title
-			var tags = lunr_output[i].tags
+			var title = title_matches[i]
 
-			html += make_entry(title, tags)
+			if (text_matches.includes(title))
+				continue
+
+			var tags = search.lunr_auto_tags(title)
+
+			html += make_entry(title, tags, "📔")
 		}
+	}
 
-		html += "</ul>"
+	// Title + content matches come second
+	if (text_matches.length > 0) {
+		var len = Math.min(text_matches.length, 10)
+
+		for (var i = 0; i < len; i++) {
+			var title = text_matches[i]
+			var tags = search.lunr_auto_tags(title)
+
+			if (title_matches.includes(title)) {
+				html += make_entry(title, tags, "📔📖")
+			} else {
+				html += make_entry(title, tags, "📖")
+			}
+		}
+	}
+
+	if (title_matches.length === 0 && text_matches.length === 0) {
+		html = "<p>Nothing found...</p>"
 	}
 
 	html += "<hr>Prefix words with <kbd>-</kbd> to disallow them, prefix words with <kbd>+</kbd> to make them required. Use <kbd>*</kbd> for unknown letters. Add <kbd>^10</kbd> after the word to multiply the importance by 10, add <kbd>~1</kbd> for fuzzy search with a distance of 1."
@@ -2894,16 +3331,39 @@ function format_results(lunr_output) {
 	return html
 }
 
-function make_entry(title, tags) {
-	return \`<li class="search_result">\${utils.display_title(title, note.info.title)}<ul><li>\${utils.display_tags(tags)}</li></ul></li>\`
+function make_entry(title, tags, type) {
+	return \`<div class="search_result"><div class="result_title">▶ \${utils.display_title(title, note.info.title)}<span class="flr"><i>\${type}</i></span></div>\${utils.display_tags(tags)}</div>\`
 }`,
 created:1610984355543,
-modified:1610984355543,
-execute:`app`
+modified:1619786992954,
+parser:`App`
 },
 {
 title:`Updates`,
-text:`> March 7, 2021: [ The Pile Update ]
+text:`> April 30, 2021: [ The Markdown Update ]
+
+Highlights:
+ - Add a built-in Markdown parser
+	* Significantly modified version of Snarkdown
+	* Tuned to be more plaintext-friendly
+ - Add a title search independent of lunr.js
+	* Matches by title are given higher priority
+	* Queries follow boolean AND logic, with space as a separator
+	* Results are ordered by last modification date descending
+ - Introduced the concept of archived notes
+	* Archived notes are invisible to search
+ - Introduced the concept of note parsers
+	* Plaintext, Markdown, App, Process
+	* Fetch and IFrame parsers to come
+	* Logic for remote_url notes deleted
+ - Style fixes for mobile devices
+	* May require you to go and edit the CSS for a smaller font size
+
+Other:
+ - Rewrite in the ias.story API server
+
+
+> March 7, 2021: [ The Pile Update ]
 
 Highlights:
  - Add a gigantic all-encompassing index, along with the infrastructure required to load it
@@ -3033,10 +3493,22 @@ Other:
 	</tr>
 </table>
 
+
 > January 26, 2021: [ Initial release ]
 `,
 created:1614426404343,
-modified:1614426404343
+modified:1619789568053,
+parser:`Text`
+},
+{
+title:`Welcome`,
+text:`Very half-baked software ahead. _There are bugs._
+---
+[GitHub](https://github.com/a0346f102085fe9f/IAS/) / [Updates] / [IAS]
+`,
+created:1611675231500,
+modified:1619789830450,
+parser:`Markdown`
 }]
 
 </script>

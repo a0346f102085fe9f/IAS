@@ -69,6 +69,10 @@ body {
 	word-break: break-word;
 }
 
+img {
+	max-width: 100%;
+}
+
 nav {
 	background-color: #202020;
 	
@@ -86,12 +90,12 @@ nav {
 
 content {
 	display: block;
-	max-width: 60rem;
+	max-width: 48em; /* Seems to be the sweet spot for me */
 	margin: 0px auto;
 }
 
 h1, h2, h3, h4, h5, h6 {
-	margin-bottom: 0px;
+	margin: 0em;
 }
 
 hr {
@@ -110,6 +114,10 @@ a:hover 				{ color: #fbf1c7; }
 a.internal 				{ color: #d79921; }
 a.internal.auto 		{ color: #98971a; }
 a.internal.auto:hover 	{ color: #458588; }
+
+ol, ul {
+	margin: 0em;
+}
 
 /* Good looking tables */
 table {
@@ -155,12 +163,22 @@ input[type="text"] {
 	font-family: inherit;
 }
 
+select {
+	color: inherit;
+	background-color: #282828;
+
+	box-sizing: border-box;
+	width: 100%;
+}
+
 /* Code blocks */
 code {
 	display: inline-block;
 	width: 100%;
+
+	box-sizing: border-box;
+	padding: 0em .2em;
 	
-	margin-bottom: 1em;
 	border-radius: 3px;
 	
 	white-space: pre;
@@ -176,6 +194,16 @@ code {
 code a {
 	color: #ff5914;
 	font-weight: bold;
+}
+
+/* Inline code */
+code.inline {
+	display: inline;
+}
+
+code.inline.large {
+	line-height: 1.35;
+	font-size: 125%;
 }
 
 /* Build cool looking consoles out of code blocks */
@@ -224,6 +252,9 @@ button.alert:hover {
 	background: linear-gradient(#fe8019 0%, #3c3836 50%);
 }
 
+.flr { float: right; }
+.fll { float: left; }
+
 .progress {
 	background-color: #202020;
 	min-height: .1em;
@@ -267,8 +298,7 @@ button.alert:hover {
 
 .nav_buttons button {
 	height: 3em;
-	min-width: 6em;
-	max-width: 15em;
+	width: 6em;
 }
 
 /* If narrow, topbar grid switches to rows */
@@ -281,6 +311,11 @@ button.alert:hover {
 	.nav_buttons {
 		display: grid;
 		grid-auto-flow: column;
+		grid-auto-columns: 1fr;
+	}
+
+	.nav_buttons button {
+		width: unset;
 	}
 
 	.nav_search {
@@ -316,6 +351,11 @@ button.alert:hover {
 	display: none;
 }
 
+/* If narrow, switch to reduced padding */
+@media (max-width: 60em) {
+	.nav_dropdown { padding: 1em .5em; }
+}
+
 .nav_dropdown.open { display: block; }
 
 /* If VERY wide, dropdown relocates to the side and doesn't obscure notes */
@@ -330,11 +370,16 @@ button.alert:hover {
 content .box {
 	background-color: #3c3836;
 	
-	min-height: 5rem;
-	margin: 1rem 0px;
-	padding: 1rem;
+	min-height: 5em;
+	margin: 1em 0px;
+	padding: 1em;
 
 	border-radius: 10px;
+}
+
+/* If narrow, switch to reduced padding */
+@media (max-width: 60em) {
+	content .box { padding: 1em .5em; }
 }
 
 content .box.attention {
@@ -344,7 +389,8 @@ content .box.attention {
 /* Note contents */
 .note_header {
 	display: grid;
-	grid-template: 1fr auto / 1fr auto;
+	grid-template-columns: 1fr auto;
+	grid-gap: 1em;
 }
 
 .note_title {
@@ -360,8 +406,8 @@ content .box.attention {
 }
 
 .note_tools button {
-	width: 5em;
-	height: 5em;
+	min-width: 5em;
+	min-height: 5em;
 }
 
 .note_body {
@@ -422,13 +468,17 @@ content .box.attention {
 }
 
 .dropdown button {
-	height: auto;
-	width: 100%;
+	min-height: auto;
+	min-width: 100%;
 }
 
 /* Search results list */
 .search_result { 
 	margin: .5em 0em;
+}
+
+.result_title a {
+	vertical-align: text-bottom;
 }
 
 /* Tags */
@@ -474,5 +524,12 @@ content .box.attention {
 @media (pointer: fine) {
 	.drag_and_drop_area {
 		transition: background-color 500ms;
+	}
+}
+
+/* Tiny fonts for mobile devices */
+@media (pointer: coarse) {
+	body {
+		font-size: 11pt;
 	}
 }
