@@ -8,13 +8,15 @@
 
 .tag.tg-anon 		{ background-color: #98971a; }
 
-.tag.tg-twilight 	{ background: linear-gradient(45deg, #A46BBD 0% 50%, #652D87 50% 100%); color: #fbf1c7; }
-.tag.tg-applejack 	{ background: linear-gradient(45deg, #EF6F2F 0% 50%, #FAF5AB 50% 100%) }
-.tag.tg-fluttershy 	{ background: linear-gradient(45deg, #E9D461 0% 50%, #F3B5CF 50% 100%); }
-.tag.tg-pinkie 		{ background: linear-gradient(45deg, #E880B0 0% 50%, #EB458B 50% 100%); }
+.tag.tg-twilight 	{ background: linear-gradient(45deg, #EA428B 0% 50%, #652D87 50% 100%); color: #fbf1c7; }
+.tag.tg-applejack 	{ background: linear-gradient(45deg, #EF6F2F 0% 50%, #FAF5AB 50% 100%); }
+.tag.tg-fluttershy 	{ background: linear-gradient(45deg, #E9D461 0% 50%, #E581B1 50% 100%); }
+.tag.tg-pinkie 		{ background-color: #EB458B; }
 .tag.tg-rainbow 	{ background: linear-gradient(45deg, #1B98D1 0% 16%, #EC4141 16% 33%, #EF7135 33% 50%, #FAF5AB 50% 66%, #5FBB4E 66% 79%, #632E86 79% 100%); }
 .tag.tg-rarity 		{ background: linear-gradient(45deg, #EAEEF0 0% 50%, #794897 50% 100%); }
 .tag.tg-spike 		{ background: linear-gradient(45deg, #985E9F 0% 50%, #96CE7D 50% 100%); }
 
-.tag.tg-celestia 	{ background: linear-gradient(45deg, #FDF5B7 0% 33%, #FDD68F 33% 66%, #FAC18A 66% 100%) }
+.tag.tg-celestia 	{ background: linear-gradient(45deg, #FDF5B7 0% 33%, #FDD68F 33% 66%, #FAC18A 66% 100%); }
 .tag.tg-luna 		{ background: linear-gradient(45deg, #363E7A 0% 50%, #1C4CC2 50% 100%); color: #fbf1c7; }
+
+.tag.tg-chrysaly 	{ background: linear-gradient(45deg, #2A2A2A 0% 33%, #004449 33% 66%, #369D69 66% 100%); color: #fbf1c7; }
