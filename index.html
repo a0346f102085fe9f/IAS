@@ -3060,168 +3060,6 @@ modified:1619094022758,
 parser:`App`
 },
 {
-title:`Updates`,
-text:`> April 30, 2021: [ The Markdown Update ]
-
-Highlights:
- - Add a built-in Markdown parser
-	* Significantly modified version of Snarkdown
-	* Tuned to be more plaintext-friendly
- - Add a title search independent of lunr.js
-	* Matches by title are given higher priority
-	* Queries follow boolean AND logic, with space as a separator
-	* Results are ordered by last modification date descending
- - Introduced the concept of archived notes
-	* Archived notes are invisible to search
- - Introduced the concept of note parsers
-	* Plaintext, Markdown, App, Process
-	* Fetch and IFrame parsers to come
-	* Logic for remote_url notes deleted
- - Style fixes for mobile devices
-	* May require you to go and edit the CSS for a smaller font size
-
-Other:
- - Rewrite in the ias.story API server
-
-
-> March 7, 2021: [ The Pile Update ]
-
-Highlights:
- - Add a gigantic all-encompassing index, along with the infrastructure required to load it
-	* No stemming, all words preserved as-is
-	* Weighs 777MB
-	* Does not work in chromium-based browsers; either fails silently or crashes <a href="https://github.com/chromium/chromium/blob/cc1cde9919f8eaa2e28e6ed61654a67bbf04c89e/third_party/blink/renderer/platform/wtf/allocator/partition_allocator.h#L32">right here</a>. Digging further, this allocator appears to have a hard limit of 2^31 bytes, <a href="https://github.com/chromium/chromium/blob/cc1cde9919f8eaa2e28e6ed61654a67bbf04c89e/base/allocator/partition_allocator/partition_alloc_constants.h#L259">declared here.</a> Sure enough, there's someone <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=416284">complaining about RAM limits in chromium</a>, although it looks like I may be hitting a different bug here.
-	* Stored on IPFS
-	* Please consider self-hosting to avoid torturing IPFS gateways:
-		- Download <a href="https://github.com/a0346f102085fe9f/IAS/archive/master.zip">IAS</a> and <a href="https://gateway.ipfs.io/ipfs/QmYKnbVVwuCC2MDaxnikgZf4Xk12h6gjQquy6DkhJNa1Lo/the_pile.json">The Pile</a> itself
-		- Place <kbd>the_pile.json</kbd> into <kbd>idx/</kbd>
-		- Run <kbd>index.html</kbd> in Firefox
-
-Other:
- - Show kilobytes downloaded in the progress bar
- - Parse JSON at download-time using <kbd>xhr.responseType = "json"</kbd>
-
-> February 28, 2021: [ IAS Rollup Update 1 ]
-
-Highlights:
- - There is now a download progress bar
- - Search: expose the <kbd>^</kbd> boost postfix
- - Indexer: stemmer improvements
-	* Steps 1abc, 2 and 3 now implemented
-	* Fixed some previously undiscovered bugs
-	* Fixed "poni" and "technologi"
-	* 2% decrease in size
- - Indexer: index format was converted to proper JSON, loaded with JSON.parse()
-	* Loads much faster
-	* No RAM spikes
-	* Allows unicode and stuff
-	* 26% increase in size... additional syntax really bloats it
- - Indexer: the <kbd>'</kbd> symbol is allowed now
-	* Allows to discern between \`luna\` and \`luna's\`.
-	* 1% increase in size
-
-Other:
- - Note fields are now closer to what's in TiddlyWiki, allowing some interchangeability
- - Note importing, both IAS format and TiddlyWiki format
- - Support for <kbd>Tab</kbd> key in the editor
- - Fixes to automatic editor resize
- - Wrap toggle in the editor (Not exposed for now)
- 
-<table>
-	<tr>
-		<th></th>
-		<th>Directories</th>
-		<th>Documents</th>
-		<th>Size v1.0</th>
-		<th>Size v1.1</th>
-	</tr>
-	<tr>
-		<td>Index A</td>
-		<td>1</td>
-		<td>6337</td>
-		<td>53.3M</td>
-		<td>65.4M</td>
-	</tr>
-	<tr>
-		<td>Index B</td>
-		<td>5</td>
-		<td>3908</td>
-		<td>46.2M</td>
-		<td>56.8M</td>
-	</tr>
-	<tr>
-		<td>Index C</td>
-		<td>25</td>
-		<td>3218</td>
-		<td>46.1M</td>
-		<td>56.5M</td>
-	</tr>
-	<tr>
-		<td>Index D</td>
-		<td>45</td>
-		<td>3360</td>
-		<td>47.4M</td>
-		<td>58.0M</td>
-	</tr>
-	<tr>
-		<td>Index E</td>
-		<td>65</td>
-		<td>4426</td>
-		<td>49.1M</td>
-		<td>60.3M</td>
-	</tr>
-	<tr>
-		<td>Index F</td>
-		<td>95</td>
-		<td>5590</td>
-		<td>48.5M</td>
-		<td>59.5M</td>
-	</tr>
-	<tr>
-		<td>Index G</td>
-		<td>140</td>
-		<td>4618</td>
-		<td>49.9M</td>
-		<td>61.3M</td>
-	</tr>
-	<tr>
-		<td>Index H</td>
-		<td>195</td>
-		<td>5545</td>
-		<td>49.3M</td>
-		<td>60.8M</td>
-	</tr>
-	<tr>
-		<td>Index I</td>
-		<td>340</td>
-		<td>5319</td>
-		<td>49.7M</td>
-		<td>61.2M</td>
-	</tr>
-	<tr>
-		<td>Index J</td>
-		<td>670</td>
-		<td>6270</td>
-		<td>49.3M</td>
-		<td>60.9M</td>
-	</tr>
-	<tr>
-		<td>Index K</td>
-		<td>1826</td>
-		<td>5493</td>
-		<td>32.0M</td>
-		<td>39.7M</td>
-	</tr>
-</table>
-
-
-> January 26, 2021: [ Initial release ]
-`,
-created:1614426404343,
-modified:1619789568053,
-parser:`Text`
-},
-{
 title:`Welcome`,
 text:`Very half-baked software ahead. _There are bugs._
 ---
@@ -3257,6 +3095,7 @@ function show_index_download_prompt() {
 	indexes.push( {title: "Index J 	60.9M 	Next 670 directories.",	 										url: "idx/index_j.json"} )
 	indexes.push( {title: "Index K 	39.7M 	Next 1826 directories.",	 										url: "idx/index_k.json"} )
 	indexes.push( {title: "The Pile 	777.0M 	All of the above.\\n\\t\\t\\t\\tNo stemming.\\n\\t\\t\\t\\tStored on IPFS.\\n\\t\\t\\t\\tNeeds 6.5GB of RAM\\n\\t\\t\\t\\tCrashes chromium-based browsers.", url: "https://gateway.ipfs.io/ipfs/QmYKnbVVwuCC2MDaxnikgZf4Xk12h6gjQquy6DkhJNa1Lo/the_pile.json"} )
+	indexes.push( {title: "Ponepaste 69.4M 	Ponepaste.org backup as of 2021.05.19", url: "idx/index_ponepaste.json"} )
 
 	for (var i = 0; i < indexes.length; i++) {
 		var index = indexes[i]
@@ -3282,6 +3121,31 @@ async function download_index(url) {
 	search.init_lunr_from_prebaked = function() {
 		log("Lunr prebaked init")
 
+		// Poneb.in and ponepaste.org have different naming conventions
+		// We need to handle both
+		function link_ponebin(title) {
+			var paste_id = (title.slice(title.lastIndexOf("-") + 1)).slice(0, -4)
+			var link = "https://poneb.in/" + paste_id
+
+			return "Open at poneb.in: <a href=\\""+link+"\\">"+link+"</a>\\n\\nThe pastes here... they are too hot for GitHub.\\n\\nEven though you see no text, More -> \\"Find similar notes\\" button still functions as intended!"
+		}
+
+		function link_ponepaste(title) {
+			var paste_id = parseInt(title)
+			var link = "https://ponepaste.org/" + paste_id
+
+			return "Open at ponepaste.org: <a href=\\""+link+"\\">"+link+"</a>\\n\\nThe pastes here... they are too hot for GitHub.\\n\\nEven though you see no text, More -> \\"Find similar notes\\" button still functions as intended!"
+		}
+
+		var link_fn = 0
+
+		// Decide based on the index filename
+		if (url.endsWith("index_ponepaste.json")) {
+			link_fn = link_ponepaste
+		} else {
+			link_fn = link_ponebin
+		}
+
 		// All of the stuff should've already been set
 		// Except search.idx._documents and gid
 		// Manually bitbang some more stuff into existence
@@ -3292,13 +3156,8 @@ async function download_index(url) {
 		for (var i = 0; i < len; i++) {
 			var title = search.idx.id_to_filename[i]
 
-			// Can't fetch from poneb.in...
-			// Let's simply link then
-			var paste_id = (title.slice(title.lastIndexOf("-") + 1)).slice(0, -4)
-			var link = "https://poneb.in/" + paste_id
-
 			var note = core.create_note(title)
-			note.text = "Open at poneb.in: <a href=\\""+link+"\\">"+link+"</a>\\n\\nThe pastes here... they are too hot for GitHub.\\n\\nCan't fetch from poneb.in directly because \`Access-Control-Allow-Origin: *\` header missing.\\n\\nEven though you see no text, More -> \\"Find similar notes\\" button still functions as intended!"
+			note.text = link_fn(title)
 
 			search.idx._documents[i] = {note: note}
 		}
@@ -3509,8 +3368,177 @@ function make_entry(title, tags, type) {
 	return \`<div class="search_result"><div class="result_title">▶ \${utils.display_title(title, note.info.title)}<span class="flr"><i>\${type}</i></span></div>\${utils.display_tags(tags)}</div>\`
 }`,
 created:1610984355543,
-modified:1619853555732,
+modified:1625057986572,
 parser:`App`
+},
+{
+title:`Updates`,
+text:`> June 30, 2021: [ Ponepaste Backup Update ]
+
+Highlights:
+ - Add an index generated from Ponepaste.org backup from 2021.05.19
+	* Some titles were broken within the backup, and may link to ponepaste.org/NaN or an incorrect ID
+	* This index will get outdated as time goes on
+
+> April 30, 2021: [ The Markdown Update ]
+
+Highlights:
+ - Add a built-in Markdown parser
+	* Significantly modified version of Snarkdown
+	* Tuned to be more plaintext-friendly
+ - Add a title search independent of lunr.js
+	* Matches by title are given higher priority
+	* Queries follow boolean AND logic, with space as a separator
+	* Results are ordered by last modification date descending
+ - Introduced the concept of archived notes
+	* Archived notes are invisible to search
+ - Introduced the concept of note parsers
+	* Plaintext, Markdown, App, Process
+	* Fetch and IFrame parsers to come
+	* Logic for remote_url notes deleted
+ - Style fixes for mobile devices
+	* May require you to go and edit the CSS for a smaller font size
+
+Other:
+ - Rewrite in the ias.story API server
+
+
+> March 7, 2021: [ The Pile Update ]
+
+Highlights:
+ - Add a gigantic all-encompassing index, along with the infrastructure required to load it
+	* No stemming, all words preserved as-is
+	* Weighs 777MB
+	* Does not work in chromium-based browsers; either fails silently or crashes <a href="https://github.com/chromium/chromium/blob/cc1cde9919f8eaa2e28e6ed61654a67bbf04c89e/third_party/blink/renderer/platform/wtf/allocator/partition_allocator.h#L32">right here</a>. Digging further, this allocator appears to have a hard limit of 2^31 bytes, <a href="https://github.com/chromium/chromium/blob/cc1cde9919f8eaa2e28e6ed61654a67bbf04c89e/base/allocator/partition_allocator/partition_alloc_constants.h#L259">declared here.</a> Sure enough, there's someone <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=416284">complaining about RAM limits in chromium</a>, although it looks like I may be hitting a different bug here.
+	* Stored on IPFS
+	* Please consider self-hosting to avoid torturing IPFS gateways:
+		- Download <a href="https://github.com/a0346f102085fe9f/IAS/archive/master.zip">IAS</a> and <a href="https://gateway.ipfs.io/ipfs/QmYKnbVVwuCC2MDaxnikgZf4Xk12h6gjQquy6DkhJNa1Lo/the_pile.json">The Pile</a> itself
+		- Place <kbd>the_pile.json</kbd> into <kbd>idx/</kbd>
+		- Run <kbd>index.html</kbd> in Firefox
+
+Other:
+ - Show kilobytes downloaded in the progress bar
+ - Parse JSON at download-time using <kbd>xhr.responseType = "json"</kbd>
+
+> February 28, 2021: [ IAS Rollup Update 1 ]
+
+Highlights:
+ - There is now a download progress bar
+ - Search: expose the <kbd>^</kbd> boost postfix
+ - Indexer: stemmer improvements
+	* Steps 1abc, 2 and 3 now implemented
+	* Fixed some previously undiscovered bugs
+	* Fixed "poni" and "technologi"
+	* 2% decrease in size
+ - Indexer: index format was converted to proper JSON, loaded with JSON.parse()
+	* Loads much faster
+	* No RAM spikes
+	* Allows unicode and stuff
+	* 26% increase in size... additional syntax really bloats it
+ - Indexer: the <kbd>'</kbd> symbol is allowed now
+	* Allows to discern between \`luna\` and \`luna's\`.
+	* 1% increase in size
+
+Other:
+ - Note fields are now closer to what's in TiddlyWiki, allowing some interchangeability
+ - Note importing, both IAS format and TiddlyWiki format
+ - Support for <kbd>Tab</kbd> key in the editor
+ - Fixes to automatic editor resize
+ - Wrap toggle in the editor (Not exposed for now)
+ 
+<table>
+	<tr>
+		<th></th>
+		<th>Directories</th>
+		<th>Documents</th>
+		<th>Size v1.0</th>
+		<th>Size v1.1</th>
+	</tr>
+	<tr>
+		<td>Index A</td>
+		<td>1</td>
+		<td>6337</td>
+		<td>53.3M</td>
+		<td>65.4M</td>
+	</tr>
+	<tr>
+		<td>Index B</td>
+		<td>5</td>
+		<td>3908</td>
+		<td>46.2M</td>
+		<td>56.8M</td>
+	</tr>
+	<tr>
+		<td>Index C</td>
+		<td>25</td>
+		<td>3218</td>
+		<td>46.1M</td>
+		<td>56.5M</td>
+	</tr>
+	<tr>
+		<td>Index D</td>
+		<td>45</td>
+		<td>3360</td>
+		<td>47.4M</td>
+		<td>58.0M</td>
+	</tr>
+	<tr>
+		<td>Index E</td>
+		<td>65</td>
+		<td>4426</td>
+		<td>49.1M</td>
+		<td>60.3M</td>
+	</tr>
+	<tr>
+		<td>Index F</td>
+		<td>95</td>
+		<td>5590</td>
+		<td>48.5M</td>
+		<td>59.5M</td>
+	</tr>
+	<tr>
+		<td>Index G</td>
+		<td>140</td>
+		<td>4618</td>
+		<td>49.9M</td>
+		<td>61.3M</td>
+	</tr>
+	<tr>
+		<td>Index H</td>
+		<td>195</td>
+		<td>5545</td>
+		<td>49.3M</td>
+		<td>60.8M</td>
+	</tr>
+	<tr>
+		<td>Index I</td>
+		<td>340</td>
+		<td>5319</td>
+		<td>49.7M</td>
+		<td>61.2M</td>
+	</tr>
+	<tr>
+		<td>Index J</td>
+		<td>670</td>
+		<td>6270</td>
+		<td>49.3M</td>
+		<td>60.9M</td>
+	</tr>
+	<tr>
+		<td>Index K</td>
+		<td>1826</td>
+		<td>5493</td>
+		<td>32.0M</td>
+		<td>39.7M</td>
+	</tr>
+</table>
+
+
+> January 26, 2021: [ Initial release ]
+`,
+created:1614426404343,
+modified:1625058615033,
+parser:`Text`
 }]
 
 </script>
