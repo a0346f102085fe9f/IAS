@@ -1,4 +1,5 @@
 # IAS
+<img src="logo.png" style="width: 25%;" alt="IAS logo. I should redraw it as proper .svg sometime." border="5px" align="right">
 Pony green search disguised as a note taking application
 
 You can clone or download this repository and run it locally. When downloaded, simply open index.html in your browser. No web server required<sup>1</sup>. It just works.
