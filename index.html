@@ -3083,18 +3083,19 @@ function show_index_download_prompt() {
 
 	var indexes = []
 
-	indexes.push( {title: "Index A 	65.4M 	Full Anonymous directory index.", 								url: "idx/index_a.json"} )
-	indexes.push( {title: "Index B 	56.8M 	The 5 largest directories, full of non-pony crap.",	 					url: "idx/index_b.json"} )
-	indexes.push( {title: "Index C 	56.5M 	Next 25 directories.",	 										url: "idx/index_c.json"} )
-	indexes.push( {title: "Index D 	58.0M 	Next 45 directories.",	 										url: "idx/index_d.json"} )
-	indexes.push( {title: "Index E 	60.3M 	Next 65 directories.",	 										url: "idx/index_e.json"} )
-	indexes.push( {title: "Index F 	59.5M 	Next 95 directories.",	 										url: "idx/index_f.json"} )
-	indexes.push( {title: "Index G 	61.3M 	Next 140 directories.",	 										url: "idx/index_g.json"} )
-	indexes.push( {title: "Index H 	60.8M 	Next 195 directories.",	 										url: "idx/index_h.json"} )
-	indexes.push( {title: "Index I 	61.2M 	Next 340 directories.",	 										url: "idx/index_i.json"} )
-	indexes.push( {title: "Index J 	60.9M 	Next 670 directories.",	 										url: "idx/index_j.json"} )
-	indexes.push( {title: "Index K 	39.7M 	Next 1826 directories.",	 										url: "idx/index_k.json"} )
+	indexes.push( {title: "Index A 	64.0M 	Full Anonymous directory index.", 								url: "idx/index_a.json"} )
+	indexes.push( {title: "Index B 	56.0M 	The 5 largest directories, full of non-pony crap.",	 					url: "idx/index_b.json"} )
+	indexes.push( {title: "Index C 	55.8M 	Next 25 directories.",	 										url: "idx/index_c.json"} )
+	indexes.push( {title: "Index D 	57.3M 	Next 45 directories.",	 										url: "idx/index_d.json"} )
+	indexes.push( {title: "Index E 	59.3M 	Next 65 directories.",	 										url: "idx/index_e.json"} )
+	indexes.push( {title: "Index F 	58.3M 	Next 95 directories.",	 										url: "idx/index_f.json"} )
+	indexes.push( {title: "Index G 	60.4M 	Next 140 directories.",	 										url: "idx/index_g.json"} )
+	indexes.push( {title: "Index H 	59.7M 	Next 195 directories.",	 										url: "idx/index_h.json"} )
+	indexes.push( {title: "Index I 	60.0M 	Next 340 directories.",	 										url: "idx/index_i.json"} )
+	indexes.push( {title: "Index J 	59.6M 	Next 670 directories.",	 										url: "idx/index_j.json"} )
+	indexes.push( {title: "Index K 	38.5M 	Next 1826 directories.",	 										url: "idx/index_k.json"} )
 	indexes.push( {title: "The Pile 	777.0M 	All of the above.\\n\\t\\t\\t\\tNo stemming.\\n\\t\\t\\t\\tStored on IPFS.\\n\\t\\t\\t\\tNeeds 6.5GB of RAM\\n\\t\\t\\t\\tCrashes chromium-based browsers.", url: "https://gateway.ipfs.io/ipfs/QmYKnbVVwuCC2MDaxnikgZf4Xk12h6gjQquy6DkhJNa1Lo/the_pile.json"} )
+	indexes.push( {title: "Index L 	51.6M 	Stuff that is not present in green.zip dump.",	 						url: "idx/index_l.json"} )
 	indexes.push( {title: "Ponepaste 69.4M 	Ponepaste.org backup as of 2021.05.19", url: "idx/index_ponepaste.json"} )
 
 	for (var i = 0; i < indexes.length; i++) {
@@ -3368,12 +3369,118 @@ function make_entry(title, tags, type) {
 	return \`<div class="search_result"><div class="result_title">▶ \${utils.display_title(title, note.info.title)}<span class="flr"><i>\${type}</i></span></div>\${utils.display_tags(tags)}</div>\`
 }`,
 created:1610984355543,
-modified:1625057986572,
+modified:1627703828344,
 parser:`App`
 },
 {
 title:`Updates`,
-text:`> June 30, 2021: [ Ponepaste Backup Update ]
+text:`> July 31, 2021: [ Prefix Removal Update ]
+
+Highlights:
+ - Index A to K have been regenerated with the author/upload time/dump time info removed
+	* Very slight increase in signal to noise ratio
+	* Very slight reduction in size
+ - Added Index L that was generated from \`green_May_2018.tar\`
+	* Deduplicated with pastebin IDs found in \`green.zip\`
+	* 40166 duplicate documents discarded
+	* 5 empty documents discarded
+	* 4768 documents added
+
+<table>
+	<tr>
+		<th></th>
+		<th>Directories</th>
+		<th>Documents</th>
+		<th>Size then</th>
+		<th>Size now</th>
+	</tr>
+	<tr>
+		<td>Index A</td>
+		<td>1</td>
+		<td>6337</td>
+		<td>65.4M</td>
+		<td>64.0M</td>
+	</tr>
+	<tr>
+		<td>Index B</td>
+		<td>5</td>
+		<td>3908</td>
+		<td>56.8M</td>
+		<td>56.0M</td>
+	</tr>
+	<tr>
+		<td>Index C</td>
+		<td>25</td>
+		<td>3218</td>
+		<td>56.5M</td>
+		<td>55.8M</td>
+	</tr>
+	<tr>
+		<td>Index D</td>
+		<td>45</td>
+		<td>3360</td>
+		<td>58.0M</td>
+		<td>57.3M</td>
+	</tr>
+	<tr>
+		<td>Index E</td>
+		<td>65</td>
+		<td>4426</td>
+		<td>60.3M</td>
+		<td>59.3M</td>
+	</tr>
+	<tr>
+		<td>Index F</td>
+		<td>95</td>
+		<td>5590</td>
+		<td>59.5M</td>
+		<td>58.3M</td>
+	</tr>
+	<tr>
+		<td>Index G</td>
+		<td>140</td>
+		<td>4618</td>
+		<td>61.3M</td>
+		<td>60.4M</td>
+	</tr>
+	<tr>
+		<td>Index H</td>
+		<td>195</td>
+		<td>5545</td>
+		<td>60.8M</td>
+		<td>59.7M</td>
+	</tr>
+	<tr>
+		<td>Index I</td>
+		<td>340</td>
+		<td>5319</td>
+		<td>61.2M</td>
+		<td>60.0M</td>
+	</tr>
+	<tr>
+		<td>Index J</td>
+		<td>670</td>
+		<td>6270</td>
+		<td>60.9M</td>
+		<td>59.6M</td>
+	</tr>
+	<tr>
+		<td>Index K</td>
+		<td>1826</td>
+		<td>5493</td>
+		<td>39.7M</td>
+		<td>38.5M</td>
+	</tr>
+	<tr>
+		<td>Index L</td>
+		<td>-</td>
+		<td>4768</td>
+		<td>-</td>
+		<td>51.6M</td>
+	</tr>
+</table>
+
+> June 30, 2021: [ Ponepaste Backup Update ]
 
 Highlights:
  - Add an index generated from Ponepaste.org backup from 2021.05.19
@@ -3537,7 +3644,7 @@ Other:
 > January 26, 2021: [ Initial release ]
 `,
 created:1614426404343,
-modified:1625058615033,
+modified:1627703907746,
 parser:`Text`
 }]
 
