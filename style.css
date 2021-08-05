@@ -54,7 +54,13 @@
 	- Pale orange 			#d65d0e
 */
 
-/* Generic */
+
+/*
+ *
+ * GENERIC RULES
+ * Layout
+ *
+ */
 html {
 	touch-action: manipulation;
 }
@@ -67,6 +73,13 @@ body {
 	margin: 0em;
 
 	word-break: break-word;
+}
+
+/* Tiny fonts for mobile devices */
+@media (pointer: coarse) {
+	body {
+		font-size: 11pt;
+	}
 }
 
 img {
@@ -106,6 +119,15 @@ sup {
 	color: #a89984;
 }
 
+ol, ul {
+	margin: 0em;
+}
+
+iframe {
+	width: 100%;
+	height: 25em;
+}
+
 a 			{ text-decoration: none; }
 a:hover 	{ text-decoration: underline; }
 
@@ -115,11 +137,22 @@ a.internal 				{ color: #d79921; }
 a.internal.auto 		{ color: #98971a; }
 a.internal.auto:hover 	{ color: #458588; }
 
-ol, ul {
-	margin: 0em;
+/* Generic hide, float left, float right */
+.hide { display: none; }
+.flr { float: right; }
+.fll { float: left; }
+
+/* Utilized by blink() */
+.attention {
+	background-color: #fbf1c7 !important;
 }
 
-/* Good looking tables */
+/*
+ *
+ * TABLES
+ * Layout
+ *
+ */
 table {
 	border-collapse: collapse;
 	border-spacing: 0;
@@ -133,7 +166,13 @@ td, th {
 	border: 1.5px solid;
 }
 
-/* Various input elements */
+
+/*
+ *
+ * VARIOUS INPUT ELEMENTS
+ * Layout
+ *
+ */
 textarea {
 	color: inherit;
 	background-color: #282828;
@@ -171,7 +210,12 @@ select {
 	width: 100%;
 }
 
-/* Code blocks */
+/*
+ *
+ * CODE BLOCKS
+ * Layout
+ *
+ */
 code {
 	display: inline-block;
 	width: 100%;
@@ -223,6 +267,13 @@ code.blinker::after{
 }
 
 
+/*
+ *
+ * BUTTONS
+ * Layout and logic
+ *
+ */
+/* Button type A: simple content, text-align: center; */
 button {
 	background-color: #3c3836;
 	color: #ebdbb2;
@@ -230,6 +281,12 @@ button {
 	cursor: pointer;
 }
 
+/* Button type B: complex content, text-align: left; */
+button * {
+	text-align: left;
+}
+
+/* Button colors */
 button:hover {
 	background-color: #7c6f64;
 }
@@ -252,38 +309,12 @@ button.alert:hover {
 	background: linear-gradient(#fe8019 0%, #3c3836 50%);
 }
 
-.flr { float: right; }
-.fll { float: left; }
-
-.progress {
-	background-color: #202020;
-	min-height: .1em;
-	width: 100%;
-	
-	text-align: center;
-	position: relative;
-}
-
-.progress .bar {
-	height: 100%;
-	width: 0%;
-	
-	background-color: #ff8001;
-	mix-blend-mode: difference;
-	
-	position: absolute;
-	left: 0px;
-}
-
-::-webkit-progress-value {
-	background-color: #ff8001;
-}
-
-::-moz-progress-bar {
-	background-color: #ff8001;
-}
-
-/* Navbar contents */
+/*
+ *
+ * NAVIGATION BAR
+ * Layout and logic
+ *
+ */
 .nav_topbar {
 	padding: .2em;
 	display: grid;
@@ -366,7 +397,13 @@ button.alert:hover {
 	}
 }
 
-/* Story contents */
+
+/*
+ *
+ * NOTE
+ * Layout and logic
+ *
+ */
 content .box {
 	background-color: #3c3836;
 	
@@ -382,11 +419,6 @@ content .box {
 	content .box { padding: 1em .5em; }
 }
 
-content .box.attention {
-	background-color: #fbf1c7;
-}
-
-/* Note contents */
 .note_header {
 	display: grid;
 	grid-template-columns: 1fr auto;
@@ -418,7 +450,39 @@ content .box.attention {
 	background-color: #282828;
 }
 
-/* Status (aka notification) boxes */
+
+/*
+ *
+ * DROPDOWNS
+ * Layout and logic
+ *
+ */
+.dropdown_root {
+	position: relative;
+}
+
+.dropdown {
+	background-color: #3c3836;
+
+	position: absolute;
+
+	box-sizing: border-box;
+	padding: 0em 1em 1em 1em;
+	border-radius: 0px 0px 5px 5px;
+}
+
+.dropdown button {
+	min-height: auto;
+	min-width: 100%;
+}
+
+
+/*
+ *
+ * STATUS- (NOTIFICATION-) BOXES
+ * Layout and logic
+ *
+ */
 .status_area {
 	position: fixed;
 	
@@ -447,32 +511,40 @@ content .box.attention {
 .status_box.success hr { border-color: #72D5A3; }
 .status_box.error 	hr { border-color: #DCA3A3; }
 
-/* Generic hide */
-.hide {
-	display: none;
-}
 
-/* Dropdowns */
-.dropdown_root {
+/*
+ *
+ * PROGRESS BARS
+ * Layout
+ *
+ */
+.progress {
+	background-color: #202020;
+	min-height: .1em;
+	width: 100%;
+	
+	text-align: center;
 	position: relative;
 }
 
-.dropdown {
-	background-color: #3c3836;
-
+.progress .bar {
+	height: 100%;
+	width: 0%;
+	
+	background-color: #ff8001;
+	mix-blend-mode: difference;
+	
 	position: absolute;
-
-	box-sizing: border-box;
-	padding: 0em 1em 1em 1em;
-	border-radius: 0px 0px 5px 5px;
+	left: 0px;
 }
 
-.dropdown button {
-	min-height: auto;
-	min-width: 100%;
-}
 
-/* Search results list */
+/*
+ *
+ * SEARCH RESULTS
+ * Layout
+ *
+ */
 .search_result { 
 	margin: .5em 0em;
 }
@@ -481,7 +553,13 @@ content .box.attention {
 	vertical-align: text-bottom;
 }
 
-/* Tags */
+
+/*
+ *
+ * TAGS
+ * Layout
+ *
+ */
 .tag {
 	background-color: #eecc66;
 	color: #3c3836;
@@ -498,7 +576,13 @@ content .box.attention {
 	line-height: 1.5em;
 }
 
-/* Drag-and-drop */
+
+/*
+ *
+ * DRAG-AND-DROP
+ * Layout and logic
+ *
+ */
 .drag_and_drop_area {
 	width: 100%;
 	height: 15em;
@@ -527,9 +611,33 @@ content .box.attention {
 	}
 }
 
-/* Tiny fonts for mobile devices */
-@media (pointer: coarse) {
-	body {
-		font-size: 11pt;
-	}
+
+/*
+ *
+ * ADVANCED RULER
+ * Layout
+ * Any tags that change font size must be outside
+ * Example: <h3><ruler>Hello World!</ruler></h3>
+ *
+ */
+ruler {
+	display: grid;
+	grid-template-columns: 1em auto 1fr;
+	align-items: center;
+	grid-gap: 1em;
+	height: 1.5em;
+}
+
+ruler:before {
+	content: '';
+	height: .15ex;
+	background-color: #7c6f64;
+	margin-top: .4ex;
+}
+
+ruler:after {
+	content: '';
+	height: .15ex;
+	background-color: #7c6f64;
+	margin-top: .4ex;
 }

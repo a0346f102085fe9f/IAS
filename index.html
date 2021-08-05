@@ -68,7 +68,7 @@ ias.core = function() {
 	// - Archived Note Flag [Hides the note from the usual search]
 	// - System Note Flag 	[Hides the note from the usual search]
 	// - List of tags 		[Just an array of tags]
-	// - Parser 			[Either "Markdown", "Text", "App" or a "Process"]
+	// - Parser 			[Either "Markdown", "Text", or "App"]
 	//
 	// Really you can add any field you need, but these are reserved
 	//
@@ -129,7 +129,7 @@ ias.core = function() {
 		note.created 	= Date.now()
 		note.modified 	= Date.now()
 		note.parser 	= "Markdown"
-
+		
 		var id = notes.push(note) - 1
 		titles[title] = id
 
@@ -225,11 +225,25 @@ ias.core = function() {
 	// Returns an array of titles that match the pattern
 	// * Pattern uses space as a separator
 	// * Case-insensitive
+	//
+	// If [pattern] is an empty string, returns a list of all notes
+	// [ignore_archived] is still taken into account
 	this.find_titles = function(pattern, ignore_archived = true) {
 		var note_list = []
 		var bits = pattern.toLowerCase().split(" ")
 
 		for (var title in titles) {
+			var note = this.get_note_reference(title)
+
+			if (note.archived && ignore_archived) {
+				continue
+			}
+
+			if (!pattern) {
+				note_list.push(title)
+				continue
+			}
+
 			var lowercase_title = title.toLowerCase()
 			var nope = false
 
@@ -243,14 +257,6 @@ ias.core = function() {
 			if (nope) {
 				continue
 			} else {
-				if (ignore_archived) {
-					var note = this.get_note_reference(title)
-
-					if (note.archived) {
-						continue
-					}
-				}
-
 				note_list.push(title)
 			}
 		}
@@ -553,7 +559,6 @@ ias.utils = function() {
 	// - format_time(timestamp)
 	// - get_new_title()
 	// - apply_css(css)
-	// - display_title(title)
 	// - display_tags(tags)
 	// - display_tag(tag)
 	//
@@ -612,6 +617,15 @@ ias.utils = function() {
 		return (window.innerHeight + window.scrollY < element.offsetTop + element.scrollHeight)
 	}
 
+	// Bring user attention to the element by briefly flashing it in bright color
+	window.blink = function(element) {
+		element.classList.add("attention")
+		setTimeout(unblink, 50)
+
+		function unblink() {
+			element.classList.remove("attention")
+		}
+	}
 
 	window.error = function(text) {
 		show_status(text)
@@ -705,11 +719,6 @@ ias.utils = function() {
 		style.innerText = css
 	}
 
-	// Format a note title into a clickable link
-	utils.display_title = function(title, open_after = "") {
-		return "<a class=\"internal auto\" href=\"#"+title+"\" onclick=\"story.open_note('"+title.replace(/'/g, "\\'")+"', '"+open_after+"'); return false;\">"+title+"</a>"
-	}
-
 	// Format an array of tags into a set of pillows
 	utils.display_tags = function(tags) {
 		var html = "<span class=\"tag_list\">"
@@ -734,32 +743,57 @@ ias.utils = function() {
 		return "<span class=\"tag tg-" + safe_tag + "\">" + tag + "</span>"
 	}
 
-	// DIY map with fixed number of slots and growing insertion cutoff
+	// Deterministic random number generator
+	// Required for Notes of the Day functionality
+	utils.seed_prng = function(seed) {
+		utils.prng = xoshiro128ss(seed, seed, seed, seed)
+
+		// https://github.com/bryc/code/blob/master/jshash/PRNGs.md
+		function xoshiro128ss(a, b, c, d) {
+			return function() {
+				var t = b << 9, r = a * 5; r = (r << 7 | r >>> 25) * 9;
+				c = c ^ a; d = d ^ b; b = b ^ c; a = a ^ d; c = c ^ t;
+				d = d << 11 | d >>> 21;
+				return (r >>> 0) / 4294967296;
+			}
+		}
+	}
+
+	utils.prng = function() {
+		return "Please call seed_prng() first"
+	}
+
+	// DIY map with fixed number of slots
+	// Relies on the fact that browsers sort object keys alphabetically
+	// Will break if they ever stop doing that
 	utils.sortedmap = function(slots) {
 		var sm = {}
 
-		var cutoff = 0
 		var map = {}
 		var len = 0
 
 		// Insert a value - object pair
 		sm.insert = function(value, object) {
-			if (value > cutoff) {
+			var min = null
 
-				if (len < slots) {
-					len++
-				} else {
-					var min = cutoff 
-
-					for (var i_value in map)
-						if (i_value < min) min = i_value
-
-					delete map[min]
-				}
-
-				map[value] = object
-				cutoff = value
+			for (var value_i in map) {
+				min = value_i
+				break
 			}
+
+			if (min === null) {
+				map[value] = object
+				return
+			}
+
+			if (len == slots) {
+				if (value < min) return
+				if (value in map === false) delete map[min]
+			} else {
+				if (value in map === false) len++
+			}
+
+			map[value] = object
 		}
 
 		// Print out the map
@@ -833,7 +867,6 @@ ias.story = function() {
 		var note = story.new_empty_note()
 
 		note.info = core.create_note(title)
-		note.info.parser = "Markdown"
 		note.reload()
 		note.edit()
 	}
@@ -902,27 +935,12 @@ ias.story = function() {
 		// Check whether the note exists
 		// If no, suggest to create it
 		if (core.note_exists(title) === false) {
-			story.suggest_note(title)
+			story.suggest_note(title, after)
 			return
 		}
 
-
-
-		// Obtain a direct reference to the note
+		// Initialize the UI + logic
 		var info = core.get_note_reference(title)
-
-		// If note is to be executed as a process, we shouldn't create any UIs for it
-		// Just run it async and exit
-		if (info.parser === "Process") {
-			var code = core.get_note_text(title)
-			var run = new AsyncFunction(code)
-			run()
-
-			return
-		}
-		
-
-		// Otherwise, we need to initialize the UI + logic
 		var note = story.new_empty_note(after)
 
 		note.info = info
@@ -932,8 +950,8 @@ ias.story = function() {
 	}
 
 	// Suggest to create a note
-	this.suggest_note = function(title) {
-		var note = story.new_empty_note()
+	this.suggest_note = function(title, after) {
+		var note = story.new_empty_note(after)
 
 		note.toolbar.display_suggestion_toolbar()
 
@@ -953,7 +971,8 @@ ias.story = function() {
 	// - set_body(text)
 	// - scroll_to()
 	// - blink()
-	// - body.q_sel(selector)
+	// - q_sel(selector)
+	// - link(title)
 	// - editor.disable_wrap()
 	// - editor.enable_wrap()
 	// - toolbar.display_default_toolbar()						TOOLBAR PRESET
@@ -984,6 +1003,7 @@ ias.story = function() {
 		note.scroll_to = scroll_to
 		note.blink = blink
 		note.q_sel = q_sel
+		note.link = link
 
 		// Editor subfolder
 		note.editor = {}
@@ -1057,7 +1077,7 @@ ias.story = function() {
 		add_parser("Markdown + HTML",		"Markdown"	)
 		add_parser("Plaintext + HTML", 		"Text"		)
 		add_parser("JavaScript / App", 		"App"		)
-		add_parser("JavaScript / Process", 	"Process"	)
+		add_parser("Remote / Iframe", 		"Iframe"	)
 
 		// Hide the editor and type selector
 		parser_selector.hidden = true
@@ -1130,16 +1150,20 @@ ias.story = function() {
 		}
 
 		function blink() {
-			note.dom.box.classList.add("attention")
-			setTimeout(unblink, 50)
-		}
-
-		function unblink() {
-			note.dom.box.classList.remove("attention")
+			window.blink(note.dom.box)
 		}
 
 		function q_sel(selector) {
 			return body.querySelector(selector)
+		}
+
+		// Use this to link to other notes
+		// Returns a special HTML snippet that has an onclick handler for ensuring that linked note opens right below the origin note
+		function link(title) {
+			var safe_openafter = note.info.title.replace(/'/g, "\\'")
+			var safe_title = title.replace(/'/g, "\\'")
+
+			return `<a class="internal" href="#${title}" onclick="story.open_note('${safe_title}', '${safe_openafter}'); return false;">${title}</a>`
 		}
 		
 		//
@@ -1328,6 +1352,7 @@ ias.story = function() {
 				var title_text = title.innerText
 
 				note.info = core.create_note(title_text)
+				note.info.parser = "Markdown"
 				reload()
 				note.edit()
 			}
@@ -1348,7 +1373,7 @@ ias.story = function() {
 					var entry = results[i]
 					var tags = search.lunr_auto_tags(entry.title)
 
-					htmlcode += "<div class=\"search_result\"><div>▶ " + utils.display_title(entry.title, note.info.title) + "</div><div>Similarity: " + entry.score + "</div><div>Tags: " + utils.display_tags(tags) + "</div></div>" 
+					htmlcode += "<div class=\"search_result\"><div>▶ " + note.link(entry.title) + "</div><div>Similarity: " + entry.score + "</div><div>Tags: " + utils.display_tags(tags) + "</div></div>" 
 				}
 
 				results_note.set_title("<i>Find similar: " + note.info.title + "</i>")
@@ -1390,7 +1415,8 @@ ias.story = function() {
 			var parsers = {
 				"Markdown": markdown_parser,
 				"Text": text_parser,
-				"App": app_loader
+				"App": app_loader,
+				"Iframe": iframe_loader
 			}
 
 			// Missing parser security check
@@ -1439,6 +1465,14 @@ ias.story = function() {
 
 				var run = new AsyncFunction("note", note.info.text)
 				run(note)
+			}
+
+			function iframe_loader() {
+				set_date("") // No way of knowing date on iframe contents
+
+				// Do some magic to get the content color right
+				// Very useful when including plaintext
+				set_body(`<iframe src="${note.info.text}" onload="event.target.contentDocument.body.style.color = window.getComputedStyle(window.document.body).color"></iframe>`)
 			}
 			// =======================================================
 		}
@@ -1610,10 +1644,7 @@ ias.dropdown = function() {
 	dropdown.get_apps = function() {
 		var htmlcode = "<h1>Apps</h1><hr>"
 
-		var apps 		= core.get_notes_with_field("parser", "App")
-		var processes 	= core.get_notes_with_field("parser", "Process")
-
-		var titles = apps.concat(processes)
+		var titles = core.get_notes_with_field("parser", "App")
 		var count = titles.length
 
 		for (var i = 0; i < count; i++) {
@@ -1828,13 +1859,15 @@ ias.search = function() {
 		return matches
 	}
 
-	search.lunr_search_text = function(text, ignore_archived = true) {
-		// Initialize if no init yet
+	// Ensure that lunr is ready to run search queries
+	search.lunr_ensure = function() {
 		if ("lunr" in search === false) {
 			log("Initializing lunr... please hold on")
 			search.reinit_lunr()
 		}
+	}
 
+	search.lunr_search_text = function(text, ignore_archived = true) {
 		var lunr_results = search.lunr.search(text)
 		var matches = []
 		var len = lunr_results.length
@@ -1863,7 +1896,7 @@ ias.search = function() {
 
 	// Attempt to automatically tag a document
 	// Returns 10 top terms
-	search.lunr_auto_tags = function(title) {
+	search.lunr_auto_tags = function(title, count = 10) {
 		var id = search.idx_find_note_id(title)
 		var tf = search.idx.fieldTermFrequencies[id]
 
@@ -1876,7 +1909,7 @@ ias.search = function() {
 			distinct_tems++
 		}
 
-		var max_tags = Math.min(10, distinct_tems)
+		var max_tags = Math.min(count, distinct_tems)
 		var top = []
 
 		for (var i = 0; i < max_tags; i++) {
@@ -1987,7 +2020,8 @@ ias.search = function() {
 	}
 
 	// Discover the most common terms amongst all documents
-	search.lunr_find_most_common = function(number) {
+	// This could come in handy if you ever decide to update or generate a new stopword list
+	search.idx_find_most_common_terms = function(number) {
 		var terms = Object.keys(search.lunr.invertedIndex)
 		var sm = utils.sortedmap(number)
 
@@ -1997,6 +2031,34 @@ ias.search = function() {
 		}
 
 		sm.log()
+	}
+
+	// Discover the longest terms amongst all documents
+	// This is useful for debugging what bloats the index down the most
+	search.idx_find_longest_terms = function(number) {
+		var terms = Object.keys(search.lunr.invertedIndex)
+		var sm = utils.sortedmap(number)
+
+		for (var term of terms) {
+			sm.insert(term.length, term)
+		}
+
+		sm.log()
+	}
+
+	// Autocomplete a term from a prefix
+	// Returns a cloud of available options, unsorted
+	// This function will benefit greatly if entries in the invertedIndex are sorted by likelihood
+	search.idx_autocomplete_term = function(prefix) {
+		var matches = []
+
+		prefix = prefix.toLowerCase()
+
+		for (var term in search.idx.invertedIndex) {
+			if (term.startsWith(prefix) && term != prefix) matches.push(term)
+		}
+
+		return matches
 	}
 
 	// Re-initialize lunr from .idx object
@@ -2643,47 +2705,6 @@ modified:1609225937327,
 parser:`App`
 },
 {
-title:`List of all notes`,
-text:`
-
-// Perform initial update
-update_list()
-
-// Install the alert handlers
-note.alerts.note_created = function() { update_list() }
-note.alerts.note_altered = function() { update_list() }
-note.alerts.note_renamed = function() { update_list() }
-note.alerts.note_deleted = function() { update_list() }
-
-function update_list() {
-	var note_list = core.get_recent_titles(core.get_note_count())
-	var html_code = ""
-
-	for (var i = 0; i < note_list.length; i++) {
-		html_code += make_link(note_list[i]) + "\\n"
-	}
-
-	note.set_body(html_code)
-}
-
-function make_link(title) {
-	return \`<a class="internal" href="#\${title}" onclick="story.open_note('\${title}', '\${note.info.title}'); return false;">\${title}</a>\`
-}`,
-created:1609225934547,
-modified:1609225934547,
-parser:`App`
-},
-{
-title:`Export all notes`,
-text:`
-if (confirm("Download all notes as .json file?")) {
-	networking.download(core.cold_storage_snapshot(), "ias_notes.json")
-}`,
-created:1610375972182,
-modified:1610375972182,
-parser:`Process`
-},
-{
 title:`Programming guide: search`,
 text:`Need to write some comments about:
 1. How search initializes and reinitializes
@@ -3014,15 +3035,6 @@ modified:1618655797948,
 parser:`Markdown`
 },
 {
-title:`Notes of the Day`,
-text:`--- Notes of the Day go here ---
----
-[System status] / [List of all notes] / [IAS]`,
-created:1611675231500,
-modified:1618658506006,
-parser:`Markdown`
-},
-{
 title:`IAS`,
 text:`Hello!
 
@@ -3036,17 +3048,122 @@ modified:1614267744062,
 parser:`Markdown`
 },
 {
+title:`Notes of the Day`,
+text:`// Initial update
+update_notd()
+
+// Install alert handlers
+note.alerts.note_created = function() { update_notd() }
+note.alerts.note_altered = function() { update_notd() }
+note.alerts.note_renamed = function() { update_notd() }
+note.alerts.note_deleted = function() { update_notd() }
+
+function update_notd() {
+	// Ensure that lunr is ready so that we can do automatic tagging
+	search.lunr_ensure()
+
+	var head = "Here are some notes that may pick your interest:"
+	var tail = "<hr>" +	note.link("System status") + " / " + 
+					note.link("List of all notes") + " / " + 
+					note.link("IAS")
+
+	var html = ""
+
+	html += head
+	html += list_random_notes(3)
+	html += tail
+
+	note.set_body(html)
+}
+
+function list_random_notes(number) {
+	// Get an array of titles, excluding archived notes
+	var notes = core.find_titles("")
+
+	// Seed the PRNG
+	// Epoch time in ms divided by 12 hours, cast to integer
+	// This will give new random notes every 12 hours
+	utils.seed_prng(Date.now() / 1000 / 3600 / 12 >>> 0)
+
+	var html = "\\n"
+
+	for (var i = 1; i <= number; i++) {
+		// Try random indexes until we hit a non-empty slot
+		do {
+			var idx = Math.floor(notes.length * utils.prng())
+		} while (!notes[idx])
+
+		var title = notes[idx]
+		var tags = search.lunr_auto_tags(title, 3)
+
+		html += i + ". " + note.link(title) + " " + utils.display_tags(tags) + "\\n"
+
+		// Empty the slot
+		delete notes[idx]
+	}
+
+	return html
+}
+`,
+created:1611675231500,
+modified:1627221956280,
+parser:`App`
+},
+{
+title:`List of all notes`,
+text:`
+
+// Perform initial update
+update_list()
+
+// Install the alert handlers
+note.alerts.note_created = function() { update_list() }
+note.alerts.note_altered = function() { update_list() }
+note.alerts.note_renamed = function() { update_list() }
+note.alerts.note_deleted = function() { update_list() }
+
+function update_list() {
+	var note_list = core.get_recent_titles(core.get_note_count())
+	var html_code = ""
+
+	for (var i = 0; i < note_list.length; i++) {
+		html_code += note.link(note_list[i]) + "\\n"
+	}
+
+	note.set_body(html_code)
+}
+`,
+created:1609225934547,
+modified:1627292414442,
+parser:`App`
+},
+{
 title:`Settings`,
-text:`// Introduction
-var introduction = add("div", note.dom.body)
-introduction.innerHTML = "--- Settings go here ---"
+text:`// Data
+var data = add("div", note.dom.body)
+data.innerHTML = "<h3><ruler>Data</ruler></h3>"
+
+var export_btn = add("button", data)
+export_btn.innerHTML = "<h3>Export all notes</h3><div>Save a .json file that can later be imported</div>"
+export_btn.onclick = export_all_notes
+
+function export_all_notes() {
+	if (confirm("Download all notes as .json file?")) {
+		networking.download(core.cold_storage_snapshot(), "ias_notes.json")
+	}
+}
+
+// Warning: do not apend anything to note.dom.body.innerHTML directly
+// It will cause button onclick handlers to be destroyed
+// Use add() instead
+add("br", note.dom.body)
 
 // Service
-var service = add("div", note.dom.body)
-service.innerHTML = "<h1>Service</h1><hr>"
+var maintenance = add("div", note.dom.body)
+maintenance.innerHTML = "<h3><ruler>Maintenance</ruler></h3>"
 
-var search_idx_reset_button = add("button", service)
-search_idx_reset_button.innerHTML = "Reset search index"
+var search_idx_reset_button = add("button", maintenance)
+search_idx_reset_button.innerHTML = "<h3>Reset search index</h3><div>Forcibly clear the index in the event of consistency violation</div>"
 search_idx_reset_button.onclick = reset_search_idx
 
 function reset_search_idx() {
@@ -3054,19 +3171,19 @@ function reset_search_idx() {
 	delete search["idx"]
 }
 
-service.innerHTML += " - use this button in the event of index consistency violation"`,
+add("br", note.dom.body)`,
 created:1619092027364,
-modified:1619094022758,
+modified:1627616595528,
 parser:`App`
 },
 {
 title:`Welcome`,
-text:`Very half-baked software ahead. _There are bugs._
+text:`Half-baked software ahead. _There are bugs._
 ---
 [GitHub](https://github.com/a0346f102085fe9f/IAS/) / [Updates] / [IAS]
 `,
 created:1611675231500,
-modified:1619789830450,
+modified:1627989359662,
 parser:`Markdown`
 },
 {
@@ -3250,20 +3367,25 @@ function show_search_prompt() {
 	note.search_field.type = "text"
 
 	note.search_results_root = add("div", note.dom.body)
-	note.search_results = add("div", note.search_results_root)
+	note.search_results_drop = add("div", note.search_results_root)
+	note.search_results = add("div", note.search_results_drop)
+	note.search_tooltip = add("div", note.search_results_drop)
+
+	note.search_tooltip.innerHTML = "<hr>Prefix words with <kbd>-</kbd> to disallow them, prefix words with <kbd>+</kbd> to make them required. Use <kbd>*</kbd> for unknown letters. Add <kbd>^10</kbd> after the word to multiply the importance by 10, add <kbd>~1</kbd> for fuzzy search with a distance of 1."
 
 	note.search_results_root.style.position = "relative"
-	note.search_results.style.position = "absolute"
+	note.search_results_drop.style.position = "absolute"
 
-	note.search_results.classList.add("dropdown", "hide")
+	note.search_results_drop.classList.add("dropdown", "hide")
 
-	note.search_results.onmouseover = lock_results
-	note.search_results.onmouseout = unlock_results
+	note.search_results_drop.onmouseover = lock_results
+	note.search_results_drop.onmouseout = unlock_results
 	note.search_field.onmouseover = lock_results
 	note.search_field.onmouseout = unlock_results
 
+	note.search_field.onfocus = handle_focus
 	note.search_field.oninput = handle_input
-	note.search_field.onfocus = handle_input
+	note.search_field.onkeydown = handle_tab
 
 	document.onclick = hide_results
 }
@@ -3274,21 +3396,30 @@ function lock_results() { results_locked = 1 }
 function unlock_results() { results_locked = 0 }
 
 function show_results() {
-	note.search_results.classList.remove("hide")
+	note.search_results_drop.classList.remove("hide")
 }
 
 function hide_results() {
 	if (results_locked === 0) {
-		note.search_results.classList.add("hide")
+		note.search_results_drop.classList.add("hide")
 	}
 }
 
+function handle_focus() {
+	if (note.search_field.value != "") show_results()
+}
+
 var input_timeout = 0
+var source_query = ""
+var completions = []
 
 function handle_input() {
 	clearTimeout(input_timeout)
 
-	if (note.search_field.value === "") {
+	source_query = note.search_field.value
+	completions = []
+
+	if (source_query === "") {
 		unlock_results()
 		hide_results()
 	} else {
@@ -3296,85 +3427,141 @@ function handle_input() {
 	}
 }
 
+function handle_tab(event) {
+	if (event.key === "Tab") {
+		clearTimeout(input_timeout)
+		event.preventDefault()
+		autocomplete_query()
+		run_search()
+	}
+}
+
+function autocomplete_query() {
+	var tokens = source_query.split(" ")
+	var last = tokens.length - 1
+
+	if (completions.length === 0) {
+		completions = search.idx_autocomplete_term(tokens[last])
+
+		// Blink angrily if no autocompletions found
+		if (completions.length === 0) {
+			blink(note.search_field)
+			return
+		}
+	}
+
+	tokens[last] = completions.shift()
+	note.search_field.value = tokens.join(" ")
+}
+
+var entries = []
+
 function run_search() {
 	var query = note.search_field.value
-	var unsafe_rxp_1 = /\\B\\*\\B/g // Detect stray *
-	var unsafe_rxp_2 = /[~^+-]$/g // Detect stray +/-/^/~
+	var unsafe_rxp_1 = /[~^+-]$/g // Detect stray +/-/^/~
+	var unsafe_rxp_2 = /\\B\\*\\B/g // Detect stray *
+	var unsafe_rxp_3 = /:/g // Detect stray :
 
-	var unsafe = unsafe_rxp_1.test(query) || unsafe_rxp_2.test(query)
+	var unsafe = unsafe_rxp_1.test(query) || unsafe_rxp_2.test(query) || unsafe_rxp_3.test(query)
 
 	if (unsafe) {
 		log("Refusing incomplete/unsafe query")
 	} else {
-		var title_matches = core.find_titles(query)
 		var text_matches = search.lunr_search_text(query)
 
+		// Respawn the results <div>
+		// This is a trick to fight slow queries piling results
+		// Cycles are still wasted, but at least you won't see it
+		note.search_results.remove()
+		var results = note.search_results = adjacent_add("div", note.search_tooltip)
 
-		note.search_results.innerHTML = format_results(title_matches, text_matches)
+		note.search_results.innerHTML = ""
+		entries = []
 		show_results()
-	} 
-}
 
-function format_results(title_matches, text_matches) {
-	var html = ""
+		function complete_fn() {
+			var title_matches = core.find_titles(query)
 
-	// Optional but will likely benefit performance
-	title_matches = title_matches.slice(0, 10)
-	text_matches = text_matches.slice(0, 10)
+			lazy_append(title_matches, "📔", results, function() {})
 
-
-	// Content and/or title matches come first
-	if (text_matches.length > 0) {
-		var len = Math.min(text_matches.length, 10)
-
-		for (var i = 0; i < len; i++) {
-			var title = text_matches[i]
-			var tags = search.lunr_auto_tags(title)
-
-			if (title_matches.includes(title)) {
-				html += make_entry(title, tags, "📔📖")
-			} else {
-				html += make_entry(title, tags, "📖")
+			if (title_matches.length === 0 && text_matches.length === 0) {
+				note.search_results.innerHTML = "<p>Nothing found...</p>"
 			}
 		}
+
+		setTimeout( function() { lazy_append(text_matches, "📖", results, complete_fn) } )
 	}
-
-	// Title only matches come second
-	if (title_matches.length > 0) {
-		var len = Math.min(title_matches.length, 10)
-
-		for (var i = 0; i < len; i++) {
-			var title = title_matches[i]
-
-			if (text_matches.includes(title))
-				continue
-
-			var tags = search.lunr_auto_tags(title)
-
-			html += make_entry(title, tags, "📔")
-		}
-	}
-
-
-	if (title_matches.length === 0 && text_matches.length === 0) {
-		html = "<p>Nothing found...</p>"
-	}
-
-	html += "<hr>Prefix words with <kbd>-</kbd> to disallow them, prefix words with <kbd>+</kbd> to make them required. Use <kbd>*</kbd> for unknown letters. Add <kbd>^10</kbd> after the word to multiply the importance by 10, add <kbd>~1</kbd> for fuzzy search with a distance of 1."
-
-	return html
 }
 
-function make_entry(title, tags, type) {
-	return \`<div class="search_result"><div class="result_title">▶ \${utils.display_title(title, note.info.title)}<span class="flr"><i>\${type}</i></span></div>\${utils.display_tags(tags)}</div>\`
-}`,
+function add_entry(_title, _tags, _icon, parent) {
+	var entry = add("div", parent)
+	var icon = add("i", add("span", entry))
+	var title = add("div", entry)
+	var tags = add("div", entry)
+
+	entry.classList.add("search_result")
+	title.classList.add("result_title")
+	icon.classList.add("flr")
+
+	title.innerHTML = "▶ " + note.link(_title)
+	icon.innerHTML = "<i>" + _icon + "</i>"
+	tags.innerHTML = utils.display_tags(_tags)
+
+	entries[_title] = { title: title, tags: tags, icon: icon }
+}
+
+// Never touch it again
+function lazy_append(titles, icon, parent, complete_fn, depth = 0) {
+	if (depth >= titles.length || depth >= 10) return setTimeout( complete_fn )
+
+	var title = titles[depth]
+	var tags = search.lunr_auto_tags(title)
+
+	if (title in entries === false) {
+		add_entry(title, tags, icon, parent)
+	} else {
+		entries[title].icon.innerHTML += icon
+	}
+
+	// setTimeout without a time argument will just enqueue the job right away
+	setTimeout(function() { lazy_append(titles, icon, parent, complete_fn, depth + 1) })
+}
+
+`,
 created:1610984355543,
-modified:1627703828344,
+modified:1628062532377,
 parser:`App`
 },
 {
 title:`Updates`,
-text:`> July 31, 2021: [ Prefix Removal Update ]
+text:`> August 5, 2021: [ IAS Rollup Update 2 ]
+
+Highlights:
+ - Progressive search
+	* First results appear right away
+	* Feels way more responsive
+	* Makes using search with The Pile somewhat bearable
+ - Search Autocomplete
+	* Hit <kbd>Tab</kbd> to cycle through autocompletions for the current word
+	* Makes finding unlikely tokens, like "assdicktentacle", easy
+	* Most likely autocompletions will be suggested first
+	* Will flash if no autocompletions found
+
+Other:
+ - Search will not re-run the query if you refocus it, now will run queries only on input or <kbd>Tab</kbd> keyhits
+ - Export all notes functionality now resides in Settings app
+ - Introduced "Notes of the Day" app
+ - Introduced "Iframe" parser
+ - Removed "Process" parser
+ - Some functions you can play around with from the browser console:
+
+<code>search.idx_find_most_common_terms(number)
+search.idx_find_longest_terms(number)
+search.idx_autocomplete_term(prefix)
+</code>
+
+
+> July 31, 2021: [ Prefix Removal Update ]
 
 Highlights:
  - Index A to K have been regenerated with the author/upload time/dump time info removed
@@ -3644,7 +3831,7 @@ Other:
 > January 26, 2021: [ Initial release ]
 `,
 created:1614426404343,
-modified:1627703907746,
+modified:1628159855163,
 parser:`Text`
 }]
 
