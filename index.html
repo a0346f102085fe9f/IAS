@@ -3211,9 +3211,11 @@ function show_index_download_prompt() {
 	indexes.push( {title: "Index I 	60.0M 	Next 340 directories.",	 										url: "idx/index_i.json"} )
 	indexes.push( {title: "Index J 	59.6M 	Next 670 directories.",	 										url: "idx/index_j.json"} )
 	indexes.push( {title: "Index K 	38.5M 	Next 1826 directories.",	 										url: "idx/index_k.json"} )
-	indexes.push( {title: "The Pile 	777.0M 	All of the above.\\n\\t\\t\\t\\tNo stemming.\\n\\t\\t\\t\\tStored on IPFS.\\n\\t\\t\\t\\tNeeds 6.5GB of RAM\\n\\t\\t\\t\\tCrashes chromium-based browsers.", url: "https://gateway.ipfs.io/ipfs/QmYKnbVVwuCC2MDaxnikgZf4Xk12h6gjQquy6DkhJNa1Lo/the_pile.json"} )
 	indexes.push( {title: "Index L 	51.6M 	Stuff that is not present in green.zip dump.",	 						url: "idx/index_l.json"} )
-	indexes.push( {title: "Ponepaste 69.4M 	Ponepaste.org backup as of 2021.05.19", url: "idx/index_ponepaste.json"} )
+	indexes.push( {title: "Pile 		274.8M 	Full poneb.in dump.\\n1/3\\t\\t\\t\\tYears 2009 - 2013.\\n\\t\\t\\t\\tStemmer disabled.", 	url: "https://github.com/a0346f102085fe9f/IAS/releases/download/pile_service_release/pile_2009_2013.json"} )
+	indexes.push( {title: "Pile 		481.8M 	Full poneb.in dump.\\n2/3\\t\\t\\t\\tYears 2014 - 2017.\\n\\t\\t\\t\\tStemmer disabled.", 	url: "https://github.com/a0346f102085fe9f/IAS/releases/download/pile_service_release/pile_2014_2017.json"} )
+	indexes.push( {title: "Pile 		133.1M 	Full poneb.in dump.\\n3/3\\t\\t\\t\\tYears 2018 - 2020.\\n\\t\\t\\t\\tStemmer disabled.", 	url: "https://github.com/a0346f102085fe9f/IAS/releases/download/pile_service_release/pile_2018_2020.json"} )
+	indexes.push( {title: "Ponepaste  69.4M 	Ponepaste.org backup as of 2021.05.19", 							url: "idx/index_ponepaste.json"} )
 
 	for (var i = 0; i < indexes.length; i++) {
 		var index = indexes[i]
@@ -3285,8 +3287,8 @@ async function download_index(url) {
 		
 		var enable_stemmer = true
 
-		// Very special handling for The Pile
-		if (url.endsWith("the_pile.json"))
+		// Very special handling for the Piles
+		if (url.includes("pile"))
 			enable_stemmer = false
 
 
@@ -3529,12 +3531,50 @@ function lazy_append(titles, icon, parent, complete_fn, depth = 0) {
 
 `,
 created:1610984355543,
-modified:1628062532377,
+modified:1628697256199,
 parser:`App`
 },
 {
 title:`Updates`,
-text:`> August 5, 2021: [ IAS Rollup Update 2 ]
+text:`> August 11, 2021: [ Reworked Pile ]
+
+Highlights:
+ - New Pile index
+	* Generated from full poneb.in dump
+	* Three parts grouped by years
+	* Hosted on GitHub releases
+	* Works with Chromium
+	* Stemmer disabled
+		- Use a lot of <kbd>Tab</kbd> instead
+	* If self-hosting:
+		- Download the files separately from the Releases page on GitHub
+		- Place them in <kbd>idx/</kbd>
+		- Edit the Search note with updated paths
+
+<table>
+	<tr>
+		<th></th>
+		<th>Documents</th>
+		<th>Size</th>
+	</tr>
+	<tr>
+		<td>Pile 2009 - 2013</td>
+		<td>23699</td>
+		<td>274.8M</td>
+	</tr>
+	<tr>
+		<td>Pile 2014 - 2017</td>
+		<td>29900</td>
+		<td>481.8M</td>
+	</tr>
+	<tr>
+		<td>Pile 2018 - 2020</td>
+		<td>8153</td>
+		<td>133.1M</td>
+	</tr>
+</table>
+
+> August 5, 2021: [ IAS Rollup Update 2 ]
 
 Highlights:
  - Progressive search
@@ -3831,7 +3871,7 @@ Other:
 > January 26, 2021: [ Initial release ]
 `,
 created:1614426404343,
-modified:1628159855163,
+modified:1628697637808,
 parser:`Text`
 }]
 
