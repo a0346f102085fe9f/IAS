@@ -392,8 +392,10 @@ button.alert:hover {
 /* If VERY wide, dropdown relocates to the side and doesn't obscure notes */
 @media (min-width: 120em) {
 	.nav_dropdown {
-		float: left;
 		max-height: 60em;
+		max-width: 22em;
+		position: absolute;
+		float: left;
 	}
 }
 

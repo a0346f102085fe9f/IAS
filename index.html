@@ -32,7 +32,7 @@ ias.locale = function() {
 	this.date_options = {year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "numeric"}
 
 	this.note_missing = "A note with this title does not yet exist. Use the Create button to create it!"
-	this.new_note_title = "Note "
+	this.new_note_title = "Note № "
 
 	this.search_placeholder = "Search..."
 
@@ -454,21 +454,13 @@ ias.bootloader = function() {
 		window.onunhandledrejection = this.handle_error
 		window.log = console.log
 
-		// Can be any object
-		var root = window
-		
-		root.bootloader = this
-
 		// Initialize an instance of EVERYTHING that was added into window.ias
 		for (var component in ias) {
-			root[component] = new window.ias[component]
+			window[component] = new ias[component]
 		}
 
-			
-		root.core.cold_storage_restore()
-
-		// Delete the original cold storage reference
-		// Now referenced by core.notes
+		// Restore notes from cold storage, then delete the original reference
+		core.cold_storage_restore()
 		delete window.ias_cold_storage
 
 		// Initial app start
@@ -737,16 +729,25 @@ ias.utils = function() {
 			return ""
 
 		// Regular expression to detect symbols not safe to place inside an HTML attribute
-		var rxp_unsafe = /[^A-Za-zА-Яа-я0-9ёЁ-]/g
-		var safe_tag = tag.replace(rxp_unsafe, "")
+		var rxp_unsafe = /[^A-Za-zА-Яа-я0-9ёЁ_\-]/g
 
-		return "<span class=\"tag tg-" + safe_tag + "\">" + tag + "</span>"
+		var safe_tag_attr = tag.replace(rxp_unsafe, "")
+		var safe_tag_text = tag.replace(/>/g, "&gt;").replace(/</g, "&lt;")
+
+		return "<span class=\"tag tg-" + safe_tag_attr + "\">" + safe_tag_text + "</span>"
 	}
 
 	// Deterministic random number generator
 	// Required for Notes of the Day functionality
 	utils.seed_prng = function(seed) {
 		utils.prng = xoshiro128ss(seed, seed, seed, seed)
+
+		// All 4 state variables were initialized with the same value
+		// Need to flush 4 times to start producing good random
+		utils.prng()
+		utils.prng()
+		utils.prng()
+		utils.prng()
 
 		// https://github.com/bryc/code/blob/master/jshash/PRNGs.md
 		function xoshiro128ss(a, b, c, d) {
@@ -1025,6 +1026,14 @@ ias.story = function() {
 		// Alert handlers
 		note.alerts = {}
 
+		// Lists to track usage of setInterval and setTimeout
+		note.held_intervals = []
+		note.held_timeouts = []
+
+		// Expose this function
+		// Search can use it to abort pending jobs
+		note.timer_cleanup = timer_cleanup
+
 		//
 		// STAGE 1: Structure
 		//
@@ -1265,7 +1274,9 @@ ias.story = function() {
 
 		function define_button_handlers() {
 			// Close the note
-			note.close = function() { 
+			note.close = function() {
+				timer_cleanup()
+
 				note.dom.box.remove()
 
 				if ("info" in note) {
@@ -1463,8 +1474,30 @@ ias.story = function() {
 				// On notes with code disable editor wrap by default
 				disable_wrap()
 
-				var run = new AsyncFunction("note", note.info.text)
-				run(note)
+				// Clear any previous setInterval() or setTimeout()
+				timer_cleanup()
+
+				// Tracking setInterval() and setTimeout() wrappers
+				function setIntervalWrapper() {
+					note.held_intervals.push( setInterval.apply(window, arguments) )
+				}
+
+				function setTimeoutWrapper() {
+					note.held_timeouts.push( setTimeout.apply(window, arguments) )
+				}
+
+				// Function constructed from:
+				// - note.info.text
+				//
+				// With arguments:
+				// - setInterval() override
+				// - setTimeout() override
+				// - note object
+				var run = new AsyncFunction("setInterval",
+											"setTimeout",
+											"note", note.info.text)
+
+				run(setIntervalWrapper, setTimeoutWrapper, note)
 			}
 
 			function iframe_loader() {
@@ -1475,6 +1508,16 @@ ias.story = function() {
 				set_body(`<iframe src="${note.info.text}" onload="event.target.contentDocument.body.style.color = window.getComputedStyle(window.document.body).color"></iframe>`)
 			}
 			// =======================================================
+		}
+
+		// We must track every setInterval() and setTimeout() and clear them when note is closed or reloaded
+		// If we don't do this, we will end up with a storm of orphaned timer handlers firing on the profiler chart
+		function timer_cleanup() {
+			for (var interval_id of note.held_intervals) clearInterval(interval_id)
+			for (var timeout_id of note.held_timeouts) clearTimeout(timeout_id)
+
+			note.held_intervals = []
+			note.held_timeouts = []
 		}
 
 	}
@@ -1555,9 +1598,18 @@ ias.navbar = function() {
 	navbar.handlers.toggle_more = 		function() { dropdown.toggle() }
 	navbar.handlers.toggle_search = 	function() { story.open_note("Search") }
 
-	// Highlight the save button to warn that you have pending changes
-	navbar.post_save_warning = function() { navbar.buttons.save.classList.add("alert") }
-	navbar.clear_save_warning = function() { navbar.buttons.save.classList.remove("alert") }
+	// Save warning:
+	// - Highlight the save button to warn that you have pending changes
+	// - Ask for confirmation if you want to close the tab
+	navbar.post_save_warning = function() { 
+		navbar.buttons.save.classList.add("alert")
+		//window.onbeforeunload = function() { return true }
+	}
+
+	navbar.clear_save_warning = function() {
+		navbar.buttons.save.classList.remove("alert")
+		//window.onbeforeunload = undefined
+	}
 
 	// Storage alerts handler
 	navbar.alert = function(alert, cause) {
@@ -2046,16 +2098,16 @@ ias.search = function() {
 		sm.log()
 	}
 
-	// Autocomplete a term from a prefix
-	// Returns a cloud of available options, unsorted
+	// Autocomplete a term from a substring
+	// Returns a cloud of available options
 	// This function will benefit greatly if entries in the invertedIndex are sorted by likelihood
-	search.idx_autocomplete_term = function(prefix) {
+	search.idx_autocomplete_term = function(needle) {
 		var matches = []
 
-		prefix = prefix.toLowerCase()
+		needle = needle.toLowerCase()
 
 		for (var term in search.idx.invertedIndex) {
-			if (term.startsWith(prefix) && term != prefix) matches.push(term)
+			if (term.includes(needle) && term != needle) matches.push(term)
 		}
 
 		return matches
@@ -2477,10 +2529,18 @@ ias.search = function() {
 		}
 	})()
 
-	// Lunr trimmer that was updated to work with Russian characters
+	// Modified Lunr trimmer
+	// - Will preserve russian characters
+	// - Will return "---" instead of an empty string as a result of trimming "==", ">=", "||" and the like
 	search.unicode_trimmer = function (token) {
 		return token.update(function (s) {
-			return s.replace(/^[^A-Za-zА-Яа-я0-9ёЁ]+/, '').replace(/[^A-Za-zА-Яа-я0-9ёЁ]+$/, '')
+			var result = s.replace(/^[^A-Za-zА-Яа-я0-9ёЁ]+/, '').replace(/[^A-Za-zА-Яа-я0-9ёЁ]+$/, '')
+
+			if (result === "") {
+				return "---"
+			} else {
+				return result
+			}
 		})
 	}
 
@@ -3459,25 +3519,23 @@ function autocomplete_query() {
 var entries = []
 
 function run_search() {
-	var query = note.search_field.value
 	var unsafe_rxp_1 = /[~^+-]$/g // Detect stray +/-/^/~
 	var unsafe_rxp_2 = /\\B\\*\\B/g // Detect stray *
 	var unsafe_rxp_3 = /:/g // Detect stray :
+	var query = note.search_field.value
+	var results = note.search_results
+
+	// Abort previous jobs
+	note.timer_cleanup()
 
 	var unsafe = unsafe_rxp_1.test(query) || unsafe_rxp_2.test(query) || unsafe_rxp_3.test(query)
 
 	if (unsafe) {
-		log("Refusing incomplete/unsafe query")
+		results.innerHTML = "<p>Refusing incomplete/unsafe query.</p>"
 	} else {
 		var text_matches = search.lunr_search_text(query)
 
-		// Respawn the results <div>
-		// This is a trick to fight slow queries piling results
-		// Cycles are still wasted, but at least you won't see it
-		note.search_results.remove()
-		var results = note.search_results = adjacent_add("div", note.search_tooltip)
-
-		note.search_results.innerHTML = ""
+		results.innerHTML = ""
 		entries = []
 		show_results()
 
@@ -3487,7 +3545,7 @@ function run_search() {
 			lazy_append(title_matches, "📔", results, function() {})
 
 			if (title_matches.length === 0 && text_matches.length === 0) {
-				note.search_results.innerHTML = "<p>Nothing found...</p>"
+				results.innerHTML = "<p>Nothing found...</p>"
 			}
 		}
 
@@ -3531,12 +3589,26 @@ function lazy_append(titles, icon, parent, complete_fn, depth = 0) {
 
 `,
 created:1610984355543,
-modified:1629029598613,
+modified:1630214452979,
 parser:`App`
 },
 {
 title:`Updates`,
-text:`> August 15, 2021: [ Reworked Pile ]
+text:`> August 29, 2021: [ Some Improvements Update ]
+
+Highlights:
+ - Substring Autocomplete
+	* Switched from <code class="inline">term.startsWith(prefix)</code> to <code class="inline">term.includes(needle)</code>
+	* Suggests left hand side completions now, like "batmare" for "mare"
+ - Pending Job Abort functionality for search
+	* Search will not slow down to a crawl when you jam the <kbd>Tab</kbd> key
+	* Less CPU cycles wasted
+
+Other:
+ - Some code and style bugfixes
+
+
+> August 15, 2021: [ Reworked Pile ]
 
 Highlights:
  - New Pile index
@@ -3871,7 +3943,7 @@ Other:
 > January 26, 2021: [ Initial release ]
 `,
 created:1614426404343,
-modified:1629029688556,
+modified:1630217531424,
 parser:`Text`
 }]
 
