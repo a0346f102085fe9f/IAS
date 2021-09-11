@@ -2,7 +2,7 @@
 	IAS Default Night Stylesheet v1
 	Based on Gruvbox Dark
 
-	Colors:
+	Element colors:
 	- Primary text 		#fbf1c7
 	- Secondary text 	#a89984
 	- Tertiary text 	#7c6f64
@@ -28,7 +28,6 @@
 
 	- Status background 	#2C2C2C
 	- Status default text	#DCDCDC
-	- Status info 			...
 	- Status success 		#72D5A3
 	- Status error 			#DCA3A3
 
@@ -36,7 +35,7 @@
 
 
 
-
+	Accent colors (Gruvbox):
 	- Vibrant red			#fb4934
 	- Vibrant green 		#b8bb26
 	- Vibrant yellow 		#fabd2f
