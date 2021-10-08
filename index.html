@@ -695,8 +695,15 @@ ias.utils = function() {
 	}
 
 	// Return a title for a new note
-	utils.get_new_title = function() {
-		return locale.new_note_title + (core.get_note_count() + 1)
+	// If the title it wanted to suggest is already occupied, it will recurse to the closest unused number
+	utils.get_new_title = function(depth = 1) {
+		var title = locale.new_note_title + (core.get_note_count() + depth)
+
+		if (core.note_exists(title)) {
+			return utils.get_new_title(depth + 1)
+		} else {
+			return title
+		}
 	}
 
 	// Switch to a new CSS
@@ -805,162 +812,23 @@ ias.utils = function() {
 	// ==============================================================================
 }
 
-ias.story = function() {
+ias.cardnote = function() {
 	//
-	// IAS GUI; story
+	// IAS GUI; card-based notes
 	//
 	// ==============================================================================
+	
+	//
+	// This is a large monolithic blob respobsible for:
+	// - Note HTML structure
+	// - Note interactions
+	// - App startup
+	// - Parsers
+	//
+	// A lot of uniqe code is buried somewhere in there, for example handlers for
+	// "Find similar notes" button and the .jsbit export function
+	//
 
-	// Shortcut
-	var story = this
-
-	story.entries = {}
-
-	// Shortcut 2
-	var entries = story.entries
-
-	// Alert the story that a note changed
-	this.alert = function(alert, cause) {
-		if (cause in entries === false) {
-			return
-		}
-
-		var note = entries[cause]
-
-		// On alterations, reload the note
-		if (alert === "note_altered") {
-			note.reload()
-		}
-
-		// On renames, remove the stale title and re-add the note under a new title
-		if (alert === "note_renamed") {
-			delete entries[cause]
-			entries[note.info.title] = note
-			note.set_title(note.info.title)
-		}
-
-		// On deletions, close the note
-		if (alert === "note_deleted") {
-			note.close()
-		}
-	}
-
-	// Alert all notes within the story
-	// If entries[cause] exists, run the edited/renamed/deleted checks
-	// Then, for every open note, call a function note[alert]() if available
-	this.alert_all_notes = function(alert, cause) {
-		for (var title in entries) {
-			var note = entries[title]
-
-			if (alert in note.alerts) {
-				note.alerts[alert](cause)
-			}
-		}
-	}
-
-	// Create a brand new note (And start editing it)
-	this.create_new_note = function() {
-		var title = utils.get_new_title()
-		var note = story.new_empty_note()
-
-		note.info = core.create_note(title)
-		note.reload()
-		note.edit()
-	}
-
-	// Create a temporary note not backed by the note storage
-	this.create_temporary_note = function(after = null) {
-		var note = story.new_empty_note(after)
-
-		note.toolbar.display_temporary_toolbar()
-		note.set_title("<i>Temporary note</i>")
-		note.set_date(utils.format_time( Date.now() ))
-
-		return note
-	}
-
-	// A new empty note within the story
-	// Completely empty, but with all the APIs ready to operate
-	this.new_empty_note = function(after = null) {
-		var note = {}
-
-		note.dom = {}
-		note.dom.box = document.createElement("div")
-		note.dom.box.classList.add("box")
-
-		// If no "after" specified, simply insert the note as a new child in the <content>
-		// Otherwise perform adjacent insertion to the target element
-		if (after === null) {
-			var story_river = q_sel("body content")
-			story_river.appendChild(note.dom.box)
-		} else {
-			if (after in entries) {
-				var previous_note = entries[after]
-				previous_note.dom.box.insertAdjacentElement("afterend", note.dom.box)
-			} else {
-				log("Tried to insert a note after ["+after+"] but was unable to find it within the story!")
-				var story_river = q_sel("body content")
-				story_river.appendChild(note.dom.box)
-			}
-		}
-		
-		// Install the APIs and the HTML structure
-		story.define_note(note)
-
-		return note
-	}
-
-	// Open a note within the story river
-	this.open_note = function(title, after = null) {
-		// We do not respect notes with empty title
-		if (title === "") {
-			log("Can't open a note that has no title.")
-			return
-		}
-
-		// Check whether the note is already open
-		// If so, scroll to it and make it blink
-		if (title in entries === true) {
-			var note = entries[title]
-			
-			note.scroll_to()
-			note.blink()
-
-			return note
-		}
-
-		// Check whether the note exists
-		// If no, suggest to create it
-		if (core.note_exists(title) === false) {
-			story.suggest_note(title, after)
-			return
-		}
-
-		// Initialize the UI + logic
-		var info = core.get_note_reference(title)
-		var note = story.new_empty_note(after)
-
-		note.info = info
-		note.reload()
-
-		return note
-	}
-
-	// Suggest to create a note
-	this.suggest_note = function(title, after) {
-		var note = story.new_empty_note(after)
-
-		note.toolbar.display_suggestion_toolbar()
-
-		note.set_title(title.italics())
-		note.set_date(utils.format_time( Date.now() ))
-		note.set_body(locale.note_missing)
-
-		note.scroll_to()
-	}
-
-	// Note UI creation and some basic APIs
-	// Requires object to have a content box
 	//
 	// List of APIs:
 	// - set_title(text)
@@ -1276,7 +1144,7 @@ ias.story = function() {
 				note.dom.box.remove()
 
 				if ("info" in note) {
-					delete entries[note.info.title]
+					story.remove_instance(note, note.info.title)
 				}
 			}
 
@@ -1406,18 +1274,12 @@ ias.story = function() {
 		// Text notes: 	fetch the text, parse it as markdown and display it
 		// App notes: 	fetch the text and run it
 		async function reload() {
-			var title = note.info.title
+			log("Reloading [" + note.info.title + "]")
 
-			log("Reloading [" + title + "]")
-
-			// Display the default toolbar
-			display_default_toolbar()
-
-			// Update the note UI title
-			set_title(title)
-
-			// Update the story entry
-			entries[title] = note
+			// Invoke the editor abort handler
+			// It will close the editor for us, in case it was open
+			// It will also update the title
+			note.abort()
 
 			var parsers = {
 				"Markdown": markdown_parser,
@@ -1450,7 +1312,7 @@ ias.story = function() {
 					set_date( utils.format_time(note.info.modified) )
 				}
 
-				set_body( markdown.parse(note.info.text, null, note.info.title) )
+				set_body( markdown.parse(note.info.text, note.info.title) )
 			}
 
 			function text_parser() {
@@ -1482,13 +1344,20 @@ ias.story = function() {
 					note.held_timeouts.push( setTimeout.apply(window, arguments) )
 				}
 
-				// Function constructed from:
+				//
+				// App main function
+				//
+				// Function is constructed from:
 				// - note.info.text
 				//
-				// With arguments:
-				// - setInterval() override
-				// - setTimeout() override
+				// Using apply() will not work to pass arguments
+				// Not without naming them first, anyway
+				//
+				// List of arguments:
+				// - setInterval() 			OVERRIDE
+				// - setTimeout()			OVERRIDE
 				// - note object
+				//
 				var run = new AsyncFunction("setInterval",
 											"setTimeout",
 											"note", note.info.text)
@@ -1515,7 +1384,241 @@ ias.story = function() {
 			note.held_intervals = []
 			note.held_timeouts = []
 		}
+	}
 
+	// ==============================================================================
+}
+
+ias.story = function() {
+	//
+	// IAS GUI; story
+	//
+	// ==============================================================================
+
+	//
+	// Story keeps track of what is open right now
+	//
+
+	//
+	// List of APIs:
+	// - open_note()
+	// - create_new_note()
+	// - create_temporary_note()
+	// - suggest_note()
+	// - ensure_entry()					INTERNAL
+	// - remove_instance()				INTERNAL
+	// - spawn_box()					INTERNAL
+	// - alert()						INTERNAL
+	// - alert_all_notes()				INTERNAL
+	// - handle_anchor_change()			URL ANCHOR CHANGE HANDLER
+	//
+
+	// Alias
+	var story = this
+
+	//
+	// This is where we keep our open notes
+	// The structure is as follows:
+	// { 
+	// 	"minicon": 	[ {instance}, {instance}, ... ],
+	// 	"IAS": 		[ {instance} ]
+	// }
+	//
+	var entries = this.entries = {}
+
+	// Open a note within the story river
+	this.open_note = function(title, after = null) {
+		// We do not respect notes with empty title
+		if (title === "") {
+			log("Can't open a note that has no title.")
+			return
+		}
+
+		// SINGLE-INSTANCE LIMITER
+		// Comment it out to allow multiple instances
+		//
+		// It works like that:
+		// - If a title is present in open entries, scroll to the [0] instance and make it blink
+		// - Do not allow to spawn additional instances by returning early
+		if (title in entries === true) {
+			var note = entries[title][0]
+			
+			note.scroll_to()
+			note.blink()
+
+			return note
+		}
+
+		// Check whether the note exists in the storage
+		// If no, suggest to create it
+		if (core.note_exists(title) === false) {
+			story.suggest_note(title, after)
+			return
+		}
+
+		// If we know this title, ensure an entry of instances
+		var instances = story.ensure_entry(title)
+
+		// Initialize the UI + logic
+		var info = core.get_note_reference(title)
+		var note = story.spawn_box(after)
+
+		// Push the instance
+		instances.push(note)
+
+		note.info = info
+		note.reload()
+
+		return note
+	}
+
+	// Create a brand new note (And start editing it)
+	this.create_new_note = function() {
+		var title = utils.get_new_title()
+		var info = core.create_note(title)
+
+		var note = story.open_note(title)
+
+		note.edit()
+	}
+
+	// Ensure that array of instances for a given title is available
+	// This is so convoluted because we want to support a windowed interface,
+	// where multiple instances of a note can be open at the same time
+	this.ensure_entry = function(title) {
+		if (title in entries === false) {
+			entries[title] = []
+		}
+
+		return entries[title]
+	}
+
+	// Remove an instance of [note pointer] from under a [title]
+	// Invoked by "Close" button handler
+	this.remove_instance = function(note, title) {
+		var instances = entries[title]
+		var idx = instances.indexOf(note)
+
+		if (idx === -1) {
+			log("Instance of [", note, "] not found under the title ["+title+"]")
+		}
+
+		delete instances[idx]
+
+		// Flatten so we don't have any holes and have a real length
+		entries[title] = instances.flat()
+
+		// If we removed the last instance, nuke the title entry altogether
+		if (entries[title].length === 0) {
+			delete entries[title]
+		}
+	}
+
+	// Create a temporary note not backed by the note storage
+	this.create_temporary_note = function(after = null) {
+		var note = story.spawn_box(after)
+
+		note.toolbar.display_temporary_toolbar()
+		note.set_title("<i>Temporary note</i>")
+		note.set_date(utils.format_time( Date.now() ))
+
+		return note
+	}
+
+	// Suggest to create a note
+	this.suggest_note = function(title, after) {
+		var note = story.spawn_box(after)
+
+		note.toolbar.display_suggestion_toolbar()
+
+		note.set_title(title.italics())
+		note.set_date(utils.format_time( Date.now() ))
+		note.set_body(locale.note_missing)
+
+		note.scroll_to()
+	}
+
+	// Spawn a box inside the story, then define a note on it
+	// Empty, but with all the APIs ready to operate
+	this.spawn_box = function(after = null) {
+		var note = {} // <--- Important line: the object created here will follow you throughout the rest of the code
+
+		note.dom = {}
+		note.dom.box = document.createElement("div")
+		note.dom.box.classList.add("box")
+
+		// If no "after" specified, simply insert the note as a new child in the <content>
+		// Otherwise perform adjacent insertion to the target element
+		if (after === null) {
+			var story_river = q_sel("body content")
+			story_river.appendChild(note.dom.box)
+		} else {
+			if (after in entries) {
+				var previous_note = entries[after][0]
+				previous_note.dom.box.insertAdjacentElement("afterend", note.dom.box)
+			} else {
+				log("Tried to insert a note after ["+after+"] but was unable to find it within the story!")
+				var story_river = q_sel("body content")
+				story_river.appendChild(note.dom.box)
+			}
+		}
+		
+		// Install the APIs and the HTML structure
+		cardnote.define_note(note)
+
+		return note
+	}
+
+	// Alert the story that a note changed
+	this.alert = function(alert, cause) {
+		if (cause in entries === false) {
+			return
+		}
+
+		var instances = entries[cause]
+
+		// On alterations, reload every instance of the note
+		if (alert === "note_altered") {
+			for (var note of instances) {
+				note.reload()
+			}
+		}
+
+		// On renames, remove the stale title, insert the new title, and update the title on every instance
+		if (alert === "note_renamed") {
+			var new_title = instances[0].info.title
+
+			delete entries[cause]
+			entries[new_title] = instances
+
+			for (var note of instances) {
+				note.set_title(new_title)
+			}
+		}
+
+		// On deletions, close every instance of the note
+		if (alert === "note_deleted") {
+			for (var note of instances) {
+				note.close()
+			}
+
+			delete entries[cause]
+		}
+	}
+
+	// Alert all notes within the story
+	// If entries[cause] exists, run the edited/renamed/deleted checks
+	// Then, for every open note, call a function note[alert]() if available
+	this.alert_all_notes = function(alert, cause) {
+		for (var title in entries) {
+			var instances = entries[title]
+
+			for (var note of instances) {
+				if (alert in note.alerts) {
+					note.alerts[alert](cause)
+				}
+			}
+		}
 	}
 
 	this.handle_anchor_change = function() {
@@ -1902,14 +2005,6 @@ ias.search = function() {
 		return matches
 	}
 
-	// Ensure that lunr is ready to run search queries
-	search.lunr_ensure = function() {
-		if ("lunr" in search === false) {
-			log("Initializing lunr... please hold on")
-			search.reinit_lunr()
-		}
-	}
-
 	search.lunr_search_text = function(text, ignore_archived = true) {
 		var lunr_results = search.lunr.search(text)
 		var matches = []
@@ -2043,7 +2138,11 @@ ias.search = function() {
 		return top
 	}
 
-	// Discover neighboring terms
+	// Discover words that were seen nearby
+	// - Works well with the built-in indexer
+	// - May produce odd results with the native indexer
+	//   The results do look correct, but seem to come out of order
+	//   I think sorting the inverted index interferes with this function
 	search.lunr_discover_nearby = function(word) {
 		var term = search.lunr.pipeline.runString(word)
 
@@ -2113,7 +2212,11 @@ ias.search = function() {
 		return matches
 	}
 
-	// Re-initialize lunr from .idx object
+	// Ensure that Lunr is ready
+	// - If it *is* ready, just exit
+	// - If search.idx is missing, call search.init_lunr_from_notes() instead
+	// - If search.idx is present, perform a partial reinitialization
+	//
 	// Creates following objects:
 	// - search.lunr 				The main lunr object
 	//
@@ -2123,7 +2226,11 @@ ias.search = function() {
 	// - search.idx.fieldLengths			Index that maps document IDs to their total term count
 	// - search.idx._documents				Index that maps document IDs to whatever metadata was provided
 	// - search.idx.documentCount			Integer, total document count
-	search.reinit_lunr = function() {
+	search.ensure_lunr = function() {
+		if ("lunr" in search) {
+			return
+		}
+
 		log("Re-initializing lunr...")
 
 		if ("idx" in search === false) {
@@ -2131,9 +2238,6 @@ ias.search = function() {
 			search.init_lunr_from_notes()
 			return
 		}
-
-		// Nuke if exists
-		delete search.lunr
 
 		search.lunr = lunr(function () {
 			// Reset the default pipelines
@@ -2144,7 +2248,7 @@ ias.search = function() {
 			// Note: nothing at all added to this.searchPipeline
 			this.pipeline.add(
 				search.unicode_trimmer,
-				lunr.stopWordFilter
+				search.multilang_stopword_filter
 			)
 
 			this.field('a') // Shortest possible field name to try and use less RAM
@@ -2161,9 +2265,11 @@ ias.search = function() {
 		log("Complete!")
 	}
 
-	// First time search.idx bootstrapping
+	// Search cold start
+	//
 	// Creates following objects:
 	// - search.idx 				A set of primary and secondary indices, some previously hidden
+	// - search.lunr 				The main lunr object
 	search.init_lunr_from_notes = function() {
 		log("Initializing lunr from scratch...")
 
@@ -2175,7 +2281,7 @@ ias.search = function() {
 			// Note: nothing at all added to this.searchPipeline
 			this.pipeline.add(
 				search.unicode_trimmer,
-				lunr.stopWordFilter
+				search.multilang_stopword_filter
 			)
 
 			this.field('a') 		// Shortest possible field name to try and use less RAM
@@ -2249,7 +2355,7 @@ ias.search = function() {
 			// Note: nothing at all added to this.searchPipeline
 			this.pipeline.add(
 				search.unicode_trimmer,
-				lunr.stopWordFilter
+				search.multilang_stopword_filter
 			)
 
 			this.field('a')
@@ -2526,6 +2632,16 @@ ias.search = function() {
 		})
 	}
 
+	search.multilang_stopword_filter = lunr.generateStopWordFilter([
+
+		// English
+		'a', 'able', 'about', 'across', 'after', 'all', 'almost', 'also', 'am', 'among', 'an', 'and', 'any', 'are', 'as', 'at', 'be', 'because', 'been', 'but', 'by', 'can', 'cannot', 'could', 'dear', 'did', 'do', 'does', 'either', 'else', 'ever', 'every', 'for', 'from', 'get', 'got', 'had', 'has', 'have', 'he', 'her', 'hers', 'him', 'his', 'how', 'however', 'i', 'if', 'in', 'into', 'is', 'it', 'its', 'just', 'least', 'let', 'like', 'likely', 'may', 'me', 'might', 'most', 'must', 'my', 'neither', 'no', 'nor', 'not', 'of', 'off', 'often', 'on', 'only', 'or', 'other', 'our', 'own', 'rather', 'said', 'say', 'says', 'she', 'should', 'since', 'so', 'some', 'than', 'that', 'the', 'their', 'them', 'then', 'there', 'these', 'they', 'this', 'tis', 'to', 'too', 'twas', 'us', 'wants', 'was', 'we', 'were', 'what', 'when', 'where', 'which', 'while', 'who', 'whom', 'why', 'will', 'with', 'would', 'yet', 'you', 'your',
+
+		// Russian
+		'а', 'и', 'в', 'к', 'с', 'о', 'на', 'но', 'по', 'ни', 'же', 'от', 'то', 'из', 'ли', 'или', 'что', 'так', 'как', 'зато', 'тоже'
+
+	])
+
 	// ==============================================================================
 }
 
@@ -2543,10 +2659,10 @@ ias.markdown = function() {
 
 	//
 	// List of APIs:
-	// - parse(markdown)
+	// - parse(markdown, [originNote, depth, links])
 	//
 
-	this.parse = function(md, prevLinks, originNote) {
+	this.parse = function(md, originNote, depth = 0, links = {}) {
 		const TAGS = {
 						'_': 	['<i>', '</i>'],
 						'__': 	['<b>', '</b>'],
@@ -2554,6 +2670,8 @@ ias.markdown = function() {
 						'**': 	['<i>', '</i>'],
 						'___': 	['<b><i>', '</i></b>'],
 						'***': 	['<b><i>', '</i></b>'],
+						'^': 	['<sup>', '</sup>'],
+						'~': 	['<sub>', '</sub>'],
 						'~~': 	['<s>', '</s>'],
 						// '\n': 	['<br>'],
 						' ': 	['<br>'],
@@ -2568,10 +2686,9 @@ ias.markdown = function() {
 			return (str+'').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 		}
 
-		let tokenizer = /((?:^---+|\* \*(?: \*)+)\n)|(?:^``` *(\w*)\n([\s\S]*?)\n```$)|(^(?:([>*+-]|\d+\.)\s+.*\n)+)|(?:!\[([^\]]*?)\]\(([^)]+?)\))|(\[)|(\](?:\(([^)]+?)\))?)|(?:^(#{1,6})\s*(.+)\n)|(?:`([^`].*?)`)|(  \n\n*|\*{1,}|_{1,}|~~)|(<[^>]*>)/gm,
+		let tokenizer = /((?:^---+|\* \*(?: \*)+)\n)|(?:^``` *(\w*)\n([\s\S]*?)\n```$)|(^(?:([>*+-]|\d+\.)\s+.*\n)+)|(?:!\[([^\]]*?)\]\(([^)]+?)\))|(\[)|(\](?:\(([^)]+?)\))?)|(?:^(#{1,6})\s*(.+)\n)|(?:`([^`].*?)`)|(  \n\n*|\*{1,}|_{1,}|\^{1,}|~{1,})|(<[^>]*>)/gm,
 			context = [],
 			out = '',
-			links = prevLinks || {},
 			last = 0,
 			chunk, prev, token, inner, t;
 
@@ -2593,7 +2710,7 @@ ias.markdown = function() {
 		}
 
 		// Handling for reference-style links
-		md = md.replace(/^\[(.+?)\]:\s*(.+)$/gm, (s, name, url) => {
+		md = md.replace(/^\[(.+?)\]:\s*(.+)(\n|$)/gm, (s, name, url) => {
 			links[name] = url;
 			return '';
 		});
@@ -2619,16 +2736,50 @@ ias.markdown = function() {
 			}
 			// > Quotes, -* lists:
 			else if (t = token[5]) {
+				// Ordered list handling
 				if (t.match(/\./)) {
 					token[4] = token[4].replace(/^\d+/gm, '');
 				}
-				inner = this.parse(outdent(token[4].replace(/^\s*[>*+.-]/gm, '')));
-				if (t=='>') t = 'blockquote';
-				else {
+
+				// Outdent the current level
+				// Input:
+				// - List Entry 1
+				// - - List Entry 2
+				// - List Entry 3
+				//
+				// Output:
+				// List Entry 1
+				// - List Entry 2
+				// List Entry 3
+				//
+				inner = outdent(token[4].replace(/^\s*[>*+.-]/gm, ''))
+
+				// Recursively parse any sublevels or any additional formatting at current level
+				inner = this.parse(inner, originNote, depth + 1, links);
+				
+				// Sublevel hackfix 1/2
+				// We used to get strings like 	"\nList Entry 1<ul>..."
+				// But now it's 				"List Entry 1\n<ul>..."
+				// Breaking in this place is unacceptable
+				// Remove the \n
+				inner = inner.replace(/\n<([uo]l)>/gm, "<$1>");
+				
+				// Decide between a blockquote or a list
+				if (t == '>') {
+					t = 'blockquote';
+				} else {
 					t = t.match(/\./) ? 'ol' : 'ul';
+
+					// This will wrap every \n separated section (aka row) into <li>...</li>
 					inner = inner.replace(/^(.*)(\n|$)/gm, '<li>$1</li>');
 				}
+
 				chunk = '<'+t+'>' + inner + '</'+t+'>';
+
+				// Sublevel hackfix 2/2
+				// If we just finished parsing a sublevel, append an \n
+				// Avoid adding it at the root level to preserve reproducible spacing
+				if (depth > 0) chunk += "\n";
 			}
 			// Images:
 			else if (token[7]) {
@@ -2651,6 +2802,11 @@ ias.markdown = function() {
 
 				out = out.replace('<a>', `<a ${class_attr} href="${encodeAttr(url)}" ${onclick_attr}>`);
 				chunk = flush() + '</a>';
+
+				// Handle [](...) nicely
+				if (prev === "" && chunk === "</a>") {
+					prev = url
+				}
 			}
 			else if (token[8]) {
 				chunk = '<a>';
@@ -2658,7 +2814,7 @@ ias.markdown = function() {
 			// Headings:
 			else if (token[11]) {
 				t = 'h' + token[11].length;
-				chunk = '<'+t+'>' + this.parse(token[12], links) + '</'+t+'>';
+				chunk = '<'+t+'>' + this.parse(token[12], originNote, depth + 1, links) + '</'+t+'>';
 			}
 			// `code`:
 			else if (token[13]) {
@@ -2745,18 +2901,6 @@ function start_blinker(console) {
 created:1609225937327,
 modified:1609225937327,
 parser:`App`
-},
-{
-title:`Programming guide: search`,
-text:`Need to write some comments about:
-1. How search initializes and reinitializes
-2. Indices present
-3. How live deletion/insertion unfolds
-4. How apps can utilize the search
-`,
-created:1611669194920,
-modified:1611669194920,
-parser:`Markdown`
 },
 {
 title:`Import notes`,
@@ -2920,13 +3064,20 @@ There's also \`inline code blocks\` made using a single backtick.
 
 # Links
 ---
-Three types of link syntax are available:
+A total of 4 types of link syntax are available:
 
 Internal link: [Welcome]
 External link: [DuckDuckGo](https://ddg.gg/)
+External link, no title: [](https://ddg.gg/)
 Reference-style link: [Reference 1]
 
 [Reference 1]: https://arxiv.org
+
+# Lists
+---
+- Lists are supported
+- - With sublevels
+- Mix \`-\`, \`*\` and \`+\` freely
 
 # Tables
 ---
@@ -2975,26 +3126,6 @@ Snarkdown never supported tables, but you can use HTML!
 Images can be added using \`![Alt text](URL)\` or via an HTML tag.`,
 created:1617529440466,
 modified:1617532884260,
-parser:`Markdown`
-},
-{
-title:`Programming guide: alert functions`,
-text:`IAS features several _alert functions_ that can be used by [Userspace Apps]. Here's the full list:
- - \`note_altered\`				Triggered when some note was altered
- - \`note_renamed\`				Triggered when some note was renamed
- - \`note_deleted\`				Triggered when some note was deleted
- - ... 						...
-
-
-Here's how an app can hook to an alert function:
-
-\`\`\`
-note.alerts.note_deleted = function(cause) { log("Time to update!") }
-\`\`\`
-
-Take a look at the \`alert_all_notes()\` of the \`ias_ui\` API server to see how alerts are invoked. Try searching the entire source code for calls to that function to find the places that post various alerts.`,
-created:1609838210065,
-modified:1618647085131,
 parser:`Markdown`
 },
 {
@@ -3100,9 +3231,12 @@ note.alerts.note_altered = function() { update_notd() }
 note.alerts.note_renamed = function() { update_notd() }
 note.alerts.note_deleted = function() { update_notd() }
 
+// Trigger an update every 12 hours
+setInterval(update_notd, 1000 * 60 * 60 * 12)
+
 function update_notd() {
 	// Ensure that lunr is ready so that we can do automatic tagging
-	search.lunr_ensure()
+	search.ensure_lunr()
 
 	var head = "Here are some notes that may pick your interest:"
 	var tail = "<hr>" +	note.link("System status") + " / " + 
@@ -3125,7 +3259,7 @@ function list_random_notes(number) {
 	// Seed the PRNG
 	// Epoch time in ms divided by 12 hours, cast to integer
 	// This will give new random notes every 12 hours
-	utils.seed_prng(Date.now() / 1000 / 3600 / 12 >>> 0)
+	utils.seed_prng(Date.now() / 1000 / 60 / 60 / 12 >>> 0)
 
 	var html = "\\n"
 
@@ -3217,6 +3351,72 @@ add("br", note.dom.body)`,
 created:1619092027364,
 modified:1627616595528,
 parser:`App`
+},
+{
+title:`Programming guide: alert functions`,
+text:`IAS features several _alert functions_ that can be used by [Userspace Apps]. Here's the full list:
+
+\`\`\`
+note_altered				Triggered when some note was altered
+note_renamed				Triggered when some note was renamed
+note_deleted				Triggered when some note was deleted
+note_created				Triggered when a note was created
+\`\`\`
+
+Here's how an app can hook to an alert function:
+
+\`\`\`
+note.alerts.note_deleted = function(cause) { log("Time to update!") }
+\`\`\`
+
+Take a look at the \`alert_all_notes()\` of the \`story\` API server to see how alerts are invoked. Try searching the entire source code for calls to that function to find the places that post various alerts.`,
+created:1609838210065,
+modified:1632583336214,
+parser:`Markdown`
+},
+{
+title:`Programming guide: hijacked functions`,
+text:`IAS will override some JavaScript functions for you.
+
+Here is an example you can try:
+
+\`\`\`
+var func = function() {
+	log("Hello")
+}
+
+setInterval(func, 1000)
+\`\`\`
+
+Ordinarily you would end up with a runaway interval situation. This thing would keep printing "Hello" to the console even after you closed the note. Things would get even worse if you tried to open this note multiple times, spawning a new interval each time and causing a storm of "Hellos" in the console.
+
+Thankfully, there's a way to overcome this: \`setTimeout()\` and \`setInterval()\` are overridden (Or monkey-patched, as some call it) with a version that tracks timeout/interval IDs in \`note.held_timeouts\` and \`note.held_intervals\`. When a note is closed, every held timeout or interval is cleared.
+
+Don't worry — the functions work in exactly the same way they did before, and you can still use the full \`setTimeout(function, time, arg1, arg2, ...)\` syntax, should you need to. 
+
+See the code of \`cardnote\` API server for more details.
+
+`,
+created:1632580559636,
+modified:1632583351194,
+parser:`Markdown`
+},
+{
+title:`Programming guide: search`,
+text:`Search supports live deletion and insertion. If a note was altered, it is quickly deleted from the primary index and then re-inserted again. Secondary and tertiary indices are cleared and will have to be regenerated, but the overhead is greatly reduced compared to a cold start.
+
+Apps call \`search.ensure_lunr()\` to ensure that search is up and ready to operate. If the search is ready to operate, it will do nothing. If only the primary index is ready, it will regenerate secondary and tertiary indices. If there's no primary index, it will do a cold start.
+
+Some functions you can play around with:
+
+\`\`\`
+search.idx_find_most_common_terms(number)	Find most common terms
+search.idx_find_longest_terms(number)		Find longest terms
+search.lunr_discover_nearby(word)		Find words that were seen nearby
+\`\`\``,
+created:1611669194920,
+modified:1633572303542,
+parser:`Markdown`
 },
 {
 title:`Welcome`,
@@ -3581,12 +3781,24 @@ function lazy_append(titles, icon, parent, complete_fn, depth = 0) {
 
 `,
 created:1610984355543,
-modified:1631342312715,
+modified:1633589396670,
 parser:`App`
 },
 {
 title:`Updates`,
-text:`> September 11, 2021: [ Frozen Points in Time ]
+text:`> October 7, 2021: [ It Ends in Dust and Disarray ]
+
+Highlights:
+ - Markdown ^superscript^ and ~subscript~
+ - Distinct style for blockquotes
+ - Story multi-instance
+ 	* Intented for winbox.js UI
+ 	* Disabled for now
+
+Other:
+ - Fixes to markdown lists and links
+
+> September 11, 2021: [ Frozen Points in Time ]
 
 Highlights:
  - Shift+Tab for Autocomplete
@@ -3949,7 +4161,7 @@ Other:
 > January 26, 2021: [ Initial release ]
 `,
 created:1614426404343,
-modified:1631370013110,
+modified:1633589750460,
 parser:`Text`
 }]
 

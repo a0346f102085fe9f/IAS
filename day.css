@@ -114,10 +114,6 @@ hr {
 	border: 1px solid #839496;
 }
 
-sup {
-	color: #586e75;
-}
-
 ol, ul {
 	margin: 0em;
 }
@@ -642,4 +638,20 @@ ruler:after {
 	height: .15ex;
 	background-color: #839496;
 	margin-top: .4ex;
+}
+
+
+/*
+ *
+ * BLOCKQUOTES
+ * Layout
+ *
+ */
+blockquote:before {
+	content: '> ';
+}
+
+blockquote:after {
+	content: ' <';
+	float: right;
 }
