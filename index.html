@@ -479,6 +479,13 @@ ias.bootloader = function() {
 			story.open_note( decodeURI(location.hash.slice(1)) )
 		}
 
+		// Set the font to "script" on 1st of April
+		// Only Windows users will enjoy it
+		var now = new Date()
+
+		if (now.getMonth() === 4 && now.getDate() === 1) {
+			q_sel("body").style.fontFamily = "script"
+		}
 	}
 
 	// JavaScript error handler
