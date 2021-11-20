@@ -2204,19 +2204,27 @@ ias.search = function() {
 		sm.log()
 	}
 
-	// Autocomplete a term from a substring
+	// Autocomplete a term
 	// Returns a cloud of available options
+	// Prefers prefix matches first, substring matches second
 	// This function will benefit greatly if entries in the invertedIndex are sorted by likelihood
 	search.idx_autocomplete_term = function(needle) {
-		var matches = []
+		var prefix_matches = []
+		var substr_matches = []
 
 		needle = needle.toLowerCase()
 
 		for (var term in search.idx.invertedIndex) {
-			if (term.includes(needle) && term != needle) matches.push(term)
+			if (term.includes(needle) && term != needle) {
+				if (term.startsWith(needle)) {
+					prefix_matches.push(term)
+				} else {
+					substr_matches.push(term)
+				}
+			}
 		}
 
-		return matches
+		return prefix_matches.concat(substr_matches)
 	}
 
 	// Ensure that Lunr is ready
