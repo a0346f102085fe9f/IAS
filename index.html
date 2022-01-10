@@ -3605,15 +3605,21 @@ async function download_index(url) {
 	function dl_complete(idx) {
 		var time_dl_done_ms = performance.now()
 		show_status("Download and parsing complete; generating secondary and tertiary indices...")
+		
+		// Allow browser 50ms to catch up
+		// Status messages get lost otherwise
+		setTimeout(lunr_regen, 50)
 
-		search.idx = idx
-		search.init_lunr_from_prebaked()
+		function lunr_regen() {
+			search.idx = idx
+			search.init_lunr_from_prebaked()
 
-		var time_init_ok_ms = performance.now()
+			var time_init_ok_ms = performance.now()
 
-		success("Index installed!<br>" + (time_dl_done_ms - time_dl_start_ms) + "ms to download and parse<br>" + (time_init_ok_ms - time_dl_done_ms) + "ms to initialize lunr")
+			success("Index installed!<br>" + (time_dl_done_ms - time_dl_start_ms) + "ms to download and parse<br>" + (time_init_ok_ms - time_dl_done_ms) + "ms to initialize lunr")
 
-		show_search_prompt()
+			show_search_prompt()
+		}
 	}
 
 }
