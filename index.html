@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!-- IAS -->
 <!-- JUMP TO BOTTOM OF THE FILE TO FIND THE ENTRY POINT -->
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>IAS</title><link rel="stylesheet" href="night.css"><link rel="stylesheet" href="tags.css"></head><body><nav><div class="nav_topbar"><div class="nav_buttons"></div><input type="text" class="nav_search"></div><div class="nav_dropdown"></div></nav><div class="status_area"></div><content><noscript><div class="box"><p>Can't work without JavaScript, unfortunately.</p></div></noscript></content>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>IAS</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="tags.css"><link rel="stylesheet" href="night.css" id="theme"></head><body><nav><div class="nav_topbar"><div class="nav_buttons inline_buttons"></div><input type="text" class="nav_search"></div><div class="nav_dropdown"></div></nav><div class="status_area"></div><content><noscript><div class="box"><p>Can't work without JavaScript, unfortunately.</p></div></noscript></content>
 <script src="lunr.js" type="text/javascript"></script>
 <script>
 "use strict";
@@ -479,13 +479,6 @@ ias.bootloader = function() {
 			story.open_note( decodeURI(location.hash.slice(1)) )
 		}
 
-		// Set the font to "script" on 1st of April
-		// Only Windows users will enjoy it
-		var now = new Date()
-
-		if (now.getMonth() === 4 && now.getDate() === 1) {
-			q_sel("body").style.fontFamily = "script"
-		}
 	}
 
 	// JavaScript error handler
@@ -547,9 +540,8 @@ ias.utils = function() {
 	// List of APIs:
 	// - q_id(...)
 	// - q_sel(...)
-	// - add(tagname, parent, id)
+	// - add(tag, parent, html)
 	// - adjacent_add(tagname, target, where, id)
-	// - dom_reverse_traverse(element, target_tag)
 	// - strectes_beyond_viewport(element)
 	// - error(text)
 	// - success(text)
@@ -572,10 +564,11 @@ ias.utils = function() {
 	window.q_sel = document.querySelector.bind(document)
 	
 	// Make an element helper
-	window.add = function(tagname, parent = document.body, id = null) {
-		var element = document.createElement(tagname)
+	window.add = function(tag, parent = document.body, html = "") {
+		var element = document.createElement(tag)
 		
-		if (id != null) element.id = name
+		element.innerHTML = html
+
 		parent.appendChild(element)
 		
 		return element
@@ -594,21 +587,6 @@ ias.utils = function() {
 		target.insertAdjacentElement(where, element)
 		
 		return element
-	}
-
-	// Walk up the DOM tree until a <TARGET_TAG> element is found
-	// Note: target tag must be in ALL CAPS
-	window.dom_reverse_traverse = function(element, target_tag) {
-		// Reached the absolute top
-		if ("parentElement" in element === false) {
-			return false
-		}
-
-		if (element.parentElement.tagName === target_tag) {
-			return element
-		} else {
-			return dom_reverse_traverse(element.parentElement, target_tag)
-		}
 	}
 
 	// Check if a part of the element, or the entire element, stretches beyond the viewport
@@ -714,9 +692,9 @@ ias.utils = function() {
 	}
 
 	// Switch to a new CSS
-	// Alters the href of the first stylesheet
+	// Alters the href of the theme stylesheet
 	utils.apply_css = function(href) {
-		var stylesheet = q_sel("link[rel=\"stylesheet\"]")
+		var stylesheet = q_sel("link#theme")
 
 		stylesheet.setAttribute("href", href)
 	}
@@ -935,6 +913,7 @@ ias.cardnote = function() {
 		var menu 		= add("div", menu_root)
 
 		// Set up CSS classes
+		buttons.classList.add("inline_buttons")
 		header.classList.add("note_header")
 		editor.classList.add("note_editor")
 		title.classList.add("note_title")
@@ -1038,12 +1017,11 @@ ias.cardnote = function() {
 		}
 
 		// Use this to link to other notes
-		// Returns a special HTML snippet that has an onclick handler for ensuring that linked note opens right below the origin note
+		// Returns a special HTML snippet
 		function link(title) {
-			var safe_openafter = note.info.title.replace(/'/g, "\\'")
-			var safe_title = title.replace(/'/g, "\\'")
+			title = title.replace(/&/g, "&amp;")
 
-			return `<a class="internal" href="#${title}" onclick="story.open_note('${safe_title}', '${safe_openafter}'); return false;">${title}</a>`
+			return `<a class="internal" href="#${title}" onclick="return story.handle_link_click(event)">${title}</a>`
 		}
 		
 		//
@@ -1064,18 +1042,15 @@ ias.cardnote = function() {
 		// Requires the note to have a handler function with a matching name
 		function add_button(name, text, parent) {
 			// 1. Create a button
-			note.buttons[name] = add("button", parent)
+			note.buttons[name] = add("button", parent, text)
 
-			// 2. Set the name
-			note.buttons[name].innerText = text
-
-			// 3. Button deletion function
+			// 2. Button deletion function
 			note.buttons[name].delete_button = function() {
 				note.buttons[name].remove()
 				delete note.buttons[name]
 			}
 
-			// 4. Handler function
+			// 3. Handler function
 			// Check whether the handler function exists
 			// If it does, hook it up
 			// Otherwise complain
@@ -1240,27 +1215,121 @@ ias.cardnote = function() {
 			}
 
 			// Find similar notes
+			// Fairly large blob of code
 			note.find_similar = function() { 
+				var results_note = story.create_temporary_note(note.dom.box)
 				var results = search.lunr_find_similar(note.info.title)
-
-				var results_note = story.create_temporary_note(note.info.title)
-				var htmlcode = ""
 				var len = results.length
+				var held_timeouts = []
 
-				// Display the self-similarity first and foremost
-				var entry = results[0]
-				htmlcode += "Self-similarity: " + entry.score
+				var self_similarity = results[0].score
 
-				for (var i = 1; i < len; i++) {
-					var entry = results[i]
-					var tags = search.lunr_auto_tags(entry.title)
+				// Entries first
+				// Hint at the bottom
+				var entries = 	add("div", results_note.dom.body)
+								add("hr", results_note.dom.body)
+				var hint 	= 	add("div", results_note.dom.body)
 
-					htmlcode += "<div class=\"search_result\"><div>▶ " + note.link(entry.title) + "</div><div>Similarity: " + entry.score + "</div><div>Tags: " + utils.display_tags(tags) + "</div></div>" 
+				hint.classList.add("find_similar_hint")
+
+				add("div", hint, "Diamonds are clickable. Self-similarity is " + self_similarity + ".") 
+
+				// Cutoff adjust
+				var adjust_div = add("div", hint)
+				var adjust_tip = add("span", adjust_div, "Adjust cutoff: ")
+				var adjust = add("input", adjust_div)
+
+				adjust.type = "number"
+				adjust.value = self_similarity
+				adjust.style.verticalAlign = "bottom"
+
+				// Invoke regen
+				adjust.oninput = function() {
+					results = search.lunr_find_similar(note.info.title, adjust.value)
+					regen_results()
 				}
 
+
+				// Run it!
+				regen_results()
+
 				results_note.set_title("<i>Find similar: " + note.info.title + "</i>")
-				results_note.set_body(htmlcode)
 				results_note.scroll_to()
+
+				// Add a new entry HTML structure
+				function add_entry() {
+					var div = add("div", entries)
+
+					div.classList.add("spoiler")
+
+					// Spoiler structure
+					var input = add("input", div)
+					var header = add("div", div)
+					var content = add("div", div)
+
+					var label = add("label", header)
+					var title = add("span", header)
+					var score = add("span", header)
+
+					input.type = "checkbox"
+					label.onclick = function() { input.click() }
+
+					var tags = add("div", content)
+
+					return { title: title, score: score, tags: tags }
+				}
+
+				function setTimeoutWrapper() {
+					held_timeouts.push( setTimeout.apply(window, arguments) )
+				}
+
+				function abort_jobs() {
+					for (var timeout_id of held_timeouts) clearTimeout(timeout_id)
+
+					held_timeouts = []
+				}
+				
+				function lazy_append(results, complete_fn, depth = 0) {
+					if (depth >= results.length) return setTimeout( complete_fn )
+
+					var result = results[depth]
+					var title = result.title
+					var tags = search.lunr_auto_tags(title, 25)
+
+					result.tags.innerHTML = utils.display_tags(tags)
+
+					// setTimeout without a time argument will just enqueue the job right away
+					setTimeoutWrapper(function() { lazy_append(results, complete_fn, depth + 1) })
+				}
+
+				function regen_results() {
+					var len = results.length
+
+					entries.innerHTML = ""
+
+					// Display all titles ASAP
+					// Skip index zero
+					for (var i = 1; i < len; i++) {
+						var result = results[i]
+						var entry = add_entry()
+
+						// Similarity:
+						// 100%		Exact duplicate
+						//  90%		Close resemblance, perhaps an earlier/later version
+						//  30%		Distant resemblance
+						entry.score.innerHTML = Math.round(result.score / self_similarity * 100) + "% similarity"
+						entry.title.innerHTML = note.link(result.title)
+						
+						// Reuse the results array to supply the newly created tag div
+						results[i].tags = entry.tags
+					}
+
+					// Stop any pending tagging jobs
+					abort_jobs()
+
+					// Lazily add tags
+					lazy_append(results, null, 1)
+				}
 			}
 
 			// Export this note in particular
@@ -1319,7 +1388,7 @@ ias.cardnote = function() {
 					set_date( utils.format_time(note.info.modified) )
 				}
 
-				set_body( markdown.parse(note.info.text, note.info.title) )
+				set_body( markdown.parse(note.info.text) )
 			}
 
 			function text_parser() {
@@ -1545,8 +1614,8 @@ ias.story = function() {
 		note.scroll_to()
 	}
 
-	// Spawn a box inside the story, then define a note on it
-	// Empty, but with all the APIs ready to operate
+	// Spawn a box inside the story OR after a target element
+	// Then define a note on it
 	this.spawn_box = function(after = null) {
 		var note = {} // <--- Important line: the object created here will follow you throughout the rest of the code
 
@@ -1557,17 +1626,9 @@ ias.story = function() {
 		// If no "after" specified, simply insert the note as a new child in the <content>
 		// Otherwise perform adjacent insertion to the target element
 		if (after === null) {
-			var story_river = q_sel("body content")
-			story_river.appendChild(note.dom.box)
+			q_sel("body content").appendChild(note.dom.box)
 		} else {
-			if (after in entries) {
-				var previous_note = entries[after][0]
-				previous_note.dom.box.insertAdjacentElement("afterend", note.dom.box)
-			} else {
-				log("Tried to insert a note after ["+after+"] but was unable to find it within the story!")
-				var story_river = q_sel("body content")
-				story_river.appendChild(note.dom.box)
-			}
+			after.insertAdjacentElement("afterend", note.dom.box)
 		}
 		
 		// Install the APIs and the HTML structure
@@ -1628,8 +1689,18 @@ ias.story = function() {
 		}
 	}
 
-	this.handle_anchor_change = function() {
+	this.handle_link_click = function(event) {
+		var target_note = event.target.attributes.href.value.slice(1)
+		var place_after = event.target.closest(".box")
+
+		story.open_note(target_note, place_after)
+
+		return false
+	}
+
+	this.handle_anchor_change = function(event) {
 		var target_note = decodeURI(location.hash.slice(1))
+
 		story.open_note(target_note)
 	}
 
@@ -1670,18 +1741,15 @@ ias.navbar = function() {
 	// Add a navbar button
 	navbar.add_button = function(name, text) {
 		// 1. Create a button
-		navbar.buttons[name] = add("button", navbar.button_area)
+		navbar.buttons[name] = add("button", navbar.button_area, text)
 
-		// 2. Set the name
-		navbar.buttons[name].innerText = text
-
-		// 3. Button deletion function
+		// 2. Button deletion function
 		navbar.buttons[name].delete_button = function() {
 			navbar.buttons[name].remove()
 			delete navbar.buttons[name]
 		}
 
-		// 4. Handler function
+		// 3. Handler function
 		navbar.buttons[name].onclick = navbar.handlers[name]
 	}
 
@@ -1708,12 +1776,12 @@ ias.navbar = function() {
 	// - Ask for confirmation if you want to close the tab
 	navbar.post_save_warning = function() { 
 		navbar.buttons.save.classList.add("alert")
-		//window.onbeforeunload = function() { return true }
+		window.onbeforeunload = function() { return true }
 	}
 
 	navbar.clear_save_warning = function() {
 		navbar.buttons.save.classList.remove("alert")
-		//window.onbeforeunload = undefined
+		window.onbeforeunload = undefined
 	}
 
 	// Storage alerts handler
@@ -1926,7 +1994,7 @@ ias.singlefile_saver = function() {
 	var js_open = "<script>\n\"use strict\";\n\n"
 	var js_close = "</" + "script>\n" 
 
-	this.html_template_start = `<!DOCTYPE html>\n<!-- IAS -->\n<!-- JUMP TO BOTTOM OF THE FILE TO FIND THE ENTRY POINT -->\n<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>IAS</title><link rel="stylesheet" href="night.css"><link rel="stylesheet" href="tags.css"></head><body><nav><div class="nav_topbar"><div class="nav_buttons"></div><input type="text" class="nav_search"></div><div class="nav_dropdown"></div></nav><div class="status_area"></div><content><noscript><div class="box"><p>Can't work without JavaScript, unfortunately.</p></div></noscript></content>\n${"<"}script src="lunr.js" type="text/javascript">${"</"}script>\n${js_open}// Source object\n// Stores the source code of the API Servers / components\n// bootloader.init() will initialize them:\n// - ias.core -> window.core\n// - ias.story -> window.story\n// - ias.locale -> window.locale\n// - etc...\n//\n// Only after initialization can you use them!\n//\nvar ias = {}\n${js_close}\n`
+	this.html_template_start = `<!DOCTYPE html>\n<!-- IAS -->\n<!-- JUMP TO BOTTOM OF THE FILE TO FIND THE ENTRY POINT -->\n<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>IAS</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="tags.css"><link rel="stylesheet" href="night.css" id="theme"></head><body><nav><div class="nav_topbar"><div class="nav_buttons inline_buttons"></div><input type="text" class="nav_search"></div><div class="nav_dropdown"></div></nav><div class="status_area"></div><content><noscript><div class="box"><p>Can't work without JavaScript, unfortunately.</p></div></noscript></content>\n${"<"}script src="lunr.js" type="text/javascript">${"</"}script>\n${js_open}// Source object\n// Stores the source code of the API Servers / components\n// bootloader.init() will initialize them:\n// - ias.core -> window.core\n// - ias.story -> window.story\n// - ias.locale -> window.locale\n// - etc...\n//\n// Only after initialization can you use them!\n//\nvar ias = {}\n${js_close}\n`
 	this.html_template_end = `</body></html>`
 	this.entry_point_template = `${js_open}${this.make_banner("IAS entry point")}var bootloader = new ias.bootloader()\nbootloader.init()\n${js_close}`
 
@@ -2012,7 +2080,9 @@ ias.search = function() {
 		return matches
 	}
 
-	search.lunr_search_text = function(text, ignore_archived = true) {
+	// Advanced full text search using Lunr.js
+	// Provides an option to discard very short or very long matches
+	search.lunr_search_text = function(text, ignore_archived = true, min_pass, max_pass) {
 		var lunr_results = search.lunr.search(text)
 		var matches = []
 		var len = lunr_results.length
@@ -2023,6 +2093,16 @@ ias.search = function() {
 
 			if (ignore_archived && note.archived)
 				continue
+
+			var size = search.lunr.fieldVectors["a/" + id].elements.length
+
+			if (max_pass)
+				if (size > max_pass)
+					continue
+
+			if (min_pass)
+				if (size < min_pass)
+					continue
 
 			matches.push(note.title)
 		}
@@ -2087,7 +2167,8 @@ ias.search = function() {
 	}
 
 	// Attempt to find documents with a similar document-space vector
-	search.lunr_find_similar = function(title) {
+	// Rejects items that scored above a specified threshold
+	search.lunr_find_similar = function(title, rejection_score = Infinity, count = 25) {
 		var id = search.idx_find_note_id(title)
 		var doc = search.lunr.fieldVectors[id]
 
@@ -2096,32 +2177,38 @@ ias.search = function() {
 			return null
 		}
 
+		var top = []
+
+		// First entry is the self-similarity
+		var self_score = doc.dot(doc)
+		var entry = { score: Math.round(self_score), title: title }
+		
+		top.push( entry )
+
 		// Two arrays
 		// One keeps scores, the other IDs
 		var score_list = []
 		var id_list = []
 
 		// Perform a vector dot product with every other document
+		// Skip self, skip duplicates
 		for (var other_id in search.lunr.fieldVectors) {
-			// Skip self
 			if (other_id === id) continue
 
 			var other_doc = search.lunr.fieldVectors[other_id]
+			var score = doc.dot(other_doc)
 
-			score_list.push( doc.dot(other_doc) )
+			if (score > rejection_score) continue
+
+			score_list.push( score )
 			id_list.push( other_id )
 		}
 
-		// Declare the top 10 (11 actually) array		
-		var len = score_list.length
-		var top = []
-
-		// First entry is the self-similarity
-		var self_similarity = {score: Math.round(doc.dot(doc)), title: title}
-		top.push(self_similarity)
-
 		// Sort through all the results and pick out a top 10
-		for (var i = 0; i < 10; i++) {
+		// Kinda trash in terms of algorithmic efficiency
+		var len = score_list.length
+
+		for (var i = 0; (i < len) && (i < count); i++) {
 			var max_value = 0.0
 			var max_id = 0
 
@@ -2135,11 +2222,10 @@ ias.search = function() {
 			}
 
 			var entry_id = id_list[max_id]
-			var entry = {score: Math.round(score_list[max_id]), title: search.idx_get_note_title(entry_id) }
+			var entry = { score: Math.round(score_list[max_id]), title: search.idx_get_note_title(entry_id) }
 			score_list[max_id] = 0.0
 
 			top.push( entry )
-			
 		}
 
 		return top
@@ -2674,10 +2760,10 @@ ias.markdown = function() {
 
 	//
 	// List of APIs:
-	// - parse(markdown, [originNote, depth, links])
+	// - parse(markdown)
 	//
 
-	this.parse = function(md, originNote, depth = 0, links = {}) {
+	this.parse = function(md, depth = 0, links = {}) {
 		const TAGS = {
 						'_': 	['<i>', '</i>'],
 						'__': 	['<b>', '</b>'],
@@ -2770,7 +2856,7 @@ ias.markdown = function() {
 				inner = outdent(token[4].replace(/^\s*[>*+.-]/gm, ''))
 
 				// Recursively parse any sublevels or any additional formatting at current level
-				inner = this.parse(inner, originNote, depth + 1, links);
+				inner = this.parse(inner, depth + 1, links);
 				
 				// Sublevel hackfix 1/2
 				// We used to get strings like 	"\nList Entry 1<ul>..."
@@ -2812,14 +2898,14 @@ ias.markdown = function() {
 				if (!url) {
 					url = "#" + prev;
 					class_attr = `class="internal"`
-					onclick_attr = `onclick="story.open_note('${prev}', '${originNote}'); return false;"`
+					onclick_attr = `onclick="return story.handle_link_click(event)"`
 				}
 
 				out = out.replace('<a>', `<a ${class_attr} href="${encodeAttr(url)}" ${onclick_attr}>`);
-				chunk = flush() + '</a>';
+				chunk = '</a>';
 
 				// Handle [](...) nicely
-				if (prev === "" && chunk === "</a>") {
+				if (prev === "") {
 					prev = url
 				}
 			}
@@ -2829,7 +2915,7 @@ ias.markdown = function() {
 			// Headings:
 			else if (token[11]) {
 				t = 'h' + token[11].length;
-				chunk = '<'+t+'>' + this.parse(token[12], originNote, depth + 1, links) + '</'+t+'>';
+				chunk = '<'+t+'>' + this.parse(token[12], depth + 1, links) + '</'+t+'>';
 			}
 			// `code`:
 			else if (token[13]) {
@@ -2923,13 +3009,10 @@ text:`
 var imported = 0
 var updated = 0
 
-var drop_area = add("div", note.dom.body)
+var drop_area = add("div", note.dom.body, "Drop here...")
+var file_tip = add("div", note.dom.body, "Or pick files if you're on mobile: ")
 
 drop_area.classList.add("drag_and_drop_area")
-drop_area.innerHTML = "Drop here..."
-
-var file_tip = add("div", note.dom.body)
-file_tip.innerText = "Or pick files if you're on mobile: "
 
 var file_input = add("input", file_tip)
 file_input.type = "file"
@@ -3194,12 +3277,12 @@ run()
 Every app has access to a \`note\` variable which provides the app with a way to control its note. Here are some of the APIs:
 
 \`\`\`
-set_body(text)				Set the body
-set_title(text)				Set the title
-set_date(text)				Set the date
-reload()				Reload the note
-scroll_to()				Scroll to the note
-...					...
+set_body(text)		Set the body
+set_title(text)		Set the title
+set_date(text)		Set the date
+reload()			Reload the note
+scroll_to()		Scroll to the note
+...			...
 \`\`\`
 
 To turn a note into an app, set its parser to "JavaScript / App" in the editor.
@@ -3220,19 +3303,6 @@ note.set_body(html)
 Try it!`,
 created:1609225934547,
 modified:1618655797948,
-parser:`Markdown`
-},
-{
-title:`IAS`,
-text:`Hello!
-
-Information Assistance System, or IAS for short, is a system for data storage and organization.
-
-A fusion of a note-taking application, recommender system and a JavaScript scratchpad. A brain extension free from the cloud.
-
-I hope it can find a place in your heart and in your self-hosted infrastructure.`,
-created:1614267744062,
-modified:1614267744062,
 parser:`Markdown`
 },
 {
@@ -3331,11 +3401,9 @@ parser:`App`
 {
 title:`Settings`,
 text:`// Data
-var data = add("div", note.dom.body)
-data.innerHTML = "<h3><ruler>Data</ruler></h3>"
+var data = add("div", note.dom.body, "<h3><ruler>Data</ruler></h3>")
 
-var export_btn = add("button", data)
-export_btn.innerHTML = "<h3>Export all notes</h3><div>Save a .json file that can later be imported</div>"
+var export_btn = add("button", data, "<h3>Export all notes</h3><div>Save a .json file that can later be imported</div>")
 export_btn.onclick = export_all_notes
 
 function export_all_notes() {
@@ -3350,11 +3418,9 @@ function export_all_notes() {
 add("br", note.dom.body)
 
 // Service
-var maintenance = add("div", note.dom.body)
-maintenance.innerHTML = "<h3><ruler>Maintenance</ruler></h3>"
+var maintenance = add("div", note.dom.body, "<h3><ruler>Maintenance</ruler></h3>")
 
-var search_idx_reset_button = add("button", maintenance)
-search_idx_reset_button.innerHTML = "<h3>Reset search index</h3><div>Forcibly clear the index in the event of consistency violation</div>"
+var search_idx_reset_button = add("button", maintenance, "<h3>Reset search index</h3><div>Forcibly clear the index in the event of consistency violation</div>")
 search_idx_reset_button.onclick = reset_search_idx
 
 function reset_search_idx() {
@@ -3444,9 +3510,30 @@ modified:1627989359662,
 parser:`Markdown`
 },
 {
+title:`IAS`,
+text:`Hello!
+
+Information Assistance System, or IAS for short, is a system for data storage and organization.
+
+It is a note-taking application and a modular JavaScript scratchpad. There's even a tiny bit of recommender system in it, as it can make suggestions for what to read.
+
+It was created under the premise of writing software that one uses every day. While this served me well, it probably means that /you/ should consider writing /your own/ digital notekeeping software, in the event that you do keep notes regularly.
+
+I used to use a simple text file, an approach that seems fairly popular. It worked well at first, but then I ran into scaling problems: reviewing it is an O(n) operation, and I ain't got no time to read over the entire 100KB file. What is the point of notes without an occasional review session?
+
+So I wrote IAS to help me out.
+
+Here's what it does:
+Distillation	Automatic tags via TF-IDF
+Sparsity		Suggest a few random notes
+Sorting		Show recently updated notes first`,
+created:1618657487198,
+modified:1643128663726,
+parser:`Markdown`
+},
+{
 title:`Search`,
-text:`
-if ("lunr" in search) {
+text:`if ("lunr" in search) {
 	show_search_prompt()
 } else {
 	show_index_download_prompt()
@@ -3469,9 +3556,9 @@ function show_index_download_prompt() {
 	indexes.push( {title: "Index J 	59.6M 	Next 670 directories.",	 										url: "idx/index_j.json"} )
 	indexes.push( {title: "Index K 	38.5M 	Next 1826 directories.",	 										url: "idx/index_k.json"} )
 	indexes.push( {title: "Index L 	51.6M 	Stuff that is not present in green.zip dump.",	 						url: "idx/index_l.json"} )
-	indexes.push( {title: "Pile		274.8M 	Full poneb.in dump.\\n1/3\\t\\t\\t\\tYears 2009 - 2013.\\n\\t\\t\\t\\tStemmer disabled.\\n\\t\\t\\t\\tHosted on IPFS.", 	url: "https://cloudflare-ipfs.com/ipfs/QmaydmgPzWVMgUYpBqmPXE58P2DtVwdJhdPBQKDCNnhrqB/pile_2009_2013.json"} )
-	indexes.push( {title: "Pile		481.8M 	Full poneb.in dump.\\n2/3\\t\\t\\t\\tYears 2014 - 2017.\\n\\t\\t\\t\\tStemmer disabled.\\n\\t\\t\\t\\tHosted on IPFS.", 	url: "https://cloudflare-ipfs.com/ipfs/QmaydmgPzWVMgUYpBqmPXE58P2DtVwdJhdPBQKDCNnhrqB/pile_2014_2017.json"} )
-	indexes.push( {title: "Pile		133.1M 	Full poneb.in dump.\\n3/3\\t\\t\\t\\tYears 2018 - 2020.\\n\\t\\t\\t\\tStemmer disabled.\\n\\t\\t\\t\\tHosted on IPFS.", 	url: "https://cloudflare-ipfs.com/ipfs/QmaydmgPzWVMgUYpBqmPXE58P2DtVwdJhdPBQKDCNnhrqB/pile_2018_2020.json"} )
+	indexes.push( {title: "Pile	274.8M 	Full poneb.in dump.\\n1/3\\t\\tYears 2009 - 2013.\\n\\t\\tStemmer disabled.\\n\\t\\tHosted on IPFS.", 	url: "https://cloudflare-ipfs.com/ipfs/QmaydmgPzWVMgUYpBqmPXE58P2DtVwdJhdPBQKDCNnhrqB/pile_2009_2013.json"} )
+	indexes.push( {title: "Pile	481.8M 	Full poneb.in dump.\\n2/3\\t\\tYears 2014 - 2017.\\n\\t\\tStemmer disabled.\\n\\t\\tHosted on IPFS.", 	url: "https://cloudflare-ipfs.com/ipfs/QmaydmgPzWVMgUYpBqmPXE58P2DtVwdJhdPBQKDCNnhrqB/pile_2014_2017.json"} )
+	indexes.push( {title: "Pile	133.1M 	Full poneb.in dump.\\n3/3\\t\\tYears 2018 - 2020.\\n\\t\\tStemmer disabled.\\n\\t\\tHosted on IPFS.", 	url: "https://cloudflare-ipfs.com/ipfs/QmaydmgPzWVMgUYpBqmPXE58P2DtVwdJhdPBQKDCNnhrqB/pile_2018_2020.json"} )
 	indexes.push( {title: "Ponepaste  69.4M 	Ponepaste.org backup as of 2021.05.19", 							url: "idx/index_ponepaste.json"} )
 
 	for (var i = 0; i < indexes.length; i++) {
@@ -3634,9 +3721,7 @@ function show_search_prompt() {
 	note.search_results_root = add("div", note.dom.body)
 	note.search_results_drop = add("div", note.search_results_root)
 	note.search_results = add("div", note.search_results_drop)
-	note.search_tooltip = add("div", note.search_results_drop)
-
-	note.search_tooltip.innerHTML = "<hr>Prefix words with <kbd>-</kbd> to disallow them, prefix words with <kbd>+</kbd> to make them required. Use <kbd>*</kbd> for unknown letters. Add <kbd>^10</kbd> after the word to multiply the importance by 10, add <kbd>~1</kbd> for fuzzy search with a distance of 1."
+	note.search_tooltip = add("div", note.search_results_drop, "<hr>Prefix words with <kbd>-</kbd> to disallow them, prefix words with <kbd>+</kbd> to make them required. Use <kbd>*</kbd> for unknown letters. Add <kbd>^10</kbd> after the word to multiply the importance by 10, add <kbd>~1</kbd> for fuzzy search with a distance of 1.")
 
 	note.search_results_root.style.position = "relative"
 	note.search_results_drop.style.position = "absolute"
@@ -3732,25 +3817,33 @@ function handle_tab(event) {
 var entries = []
 
 function run_search() {
-	var unsafe_rxp_1 = /[~^+-]$/g // Detect stray +/-/^/~
+	var minmax_size_rxp = /\\b(min|max)size:(\\d+)\\b/g // Detect minsize: and maxsize:
+	var unsafe_rxp_1 = /[~^+-]\\B/g // Detect stray +/-/^/~
 	var unsafe_rxp_2 = /\\B\\*\\B/g // Detect stray *
 	var unsafe_rxp_3 = /:/g // Detect stray :
 	var query = note.search_field.value
 	var results = note.search_results
+	var size = { min: 0, max: 0 }
 
 	// Abort previous jobs
 	note.timer_cleanup()
+
+	function minmax_update($$, $1, $2) {
+		size[$1] = parseInt($2)
+		return ""
+	}
+
+	query = query.replace(minmax_size_rxp, minmax_update)
 
 	var unsafe = unsafe_rxp_1.test(query) || unsafe_rxp_2.test(query) || unsafe_rxp_3.test(query)
 
 	if (unsafe) {
 		results.innerHTML = "<p>Refusing incomplete/unsafe query.</p>"
 	} else {
-		var text_matches = search.lunr_search_text(query)
+		var text_matches = search.lunr_search_text(query, true, size.min, size.max)
 
 		results.innerHTML = ""
 		entries = []
-		show_results()
 
 		function complete_fn() {
 			var title_matches = core.find_titles(query)
@@ -3764,6 +3857,8 @@ function run_search() {
 
 		setTimeout( function() { lazy_append(text_matches, "📖", results, complete_fn) } )
 	}
+
+	show_results()
 }
 
 function add_entry(_title, _tags, _icon, parent) {
@@ -3802,12 +3897,34 @@ function lazy_append(titles, icon, parent, complete_fn, depth = 0) {
 
 `,
 created:1610984355543,
-modified:1633589396670,
+modified:1643128919418,
 parser:`App`
 },
 {
 title:`Updates`,
-text:`> October 7, 2021: [ It Ends in Dust and Disarray ]
+text:`> January 26, 2022: [ Anniversary Update ]
+
+Highlights:
+ - Filter out small documents using "minsize:30000"
+ - Filter out large documents using "maxsize:10000"
+ - Find Similar reworked to be more digestible
+ - Autocomplete prefers prefix matches
+
+Other:
+ - Index evaluation put on a 50ms delay
+	* Now you can actually see the "Download complete" status message
+	* Previously it was lost due to the massive CPU load that followed
+ - Styles made more maintainable:
+	* CSS files for Day and Night themes now contain only color properties.
+	* Everything that defines the layout is now in uncolored \`style.css\`
+ - Button borders look nice, at last
+ - Linking is now more elegant
+ - Also some bugs fixed
+
+MinMax clamps are pretty inefficient. I made a commitment to avoid altering lunr.js source code and this prevents me from running the size checks before it ranks a document. This is stupid and shall be fixed in any future rewrite.
+
+
+> October 7, 2021: [ It Ends in Dust and Disarray ]
 
 Highlights:
  - Markdown ^superscript^ and ~subscript~
@@ -4182,7 +4299,7 @@ Other:
 > January 26, 2021: [ Initial release ]
 `,
 created:1614426404343,
-modified:1633589750460,
+modified:1643131466111,
 parser:`Text`
 }]
 
