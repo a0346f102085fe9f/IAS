@@ -39,8 +39,8 @@ ias.locale = function() {
 	this.saving_error = "Unable to save!"
 	this.saving_ok = "Saved."
 
-	this.network_error = "Networking: network error"
-	this.server_error = "Networking: server error"
+	this.network_error = "Network error"
+	this.server_error = "Server error"
 	this.error_code = "Error code: "
 	this.address = "Address: "
 
@@ -467,6 +467,7 @@ ias.bootloader = function() {
 		navbar.init()
 		dropdown.init()
 
+		story.open_note("⚠️ Notice")
 		story.open_note("Welcome")
 		story.open_note("Search")
 
@@ -543,10 +544,9 @@ ias.utils = function() {
 	// - add(tag, parent, html)
 	// - adjacent_add(tagname, target, where, id)
 	// - strectes_beyond_viewport(element)
-	// - error(text)
-	// - success(text)
-	// - show_status(text)
-	// - hide_status()
+	// - add_status(html)
+	// - success(html)
+	// - error(html)
 	// - format_time(timestamp)
 	// - get_new_title()
 	// - apply_css(css)
@@ -604,36 +604,46 @@ ias.utils = function() {
 		}
 	}
 
-	window.error = function(text) {
-		show_status(text)
-
-		statusbox.classList.add("error")
-	}
-
-	window.success = function(text) {
-		show_status(text)
-
-		statusbox.classList.add("success")
-		setTimeout(hide_status, 5000)
-	}
-
 	// Display a status box in the status area
-	window.show_status = function(text) {
-		if ("statusbox" in window === false) {
-			window.statusbox = add("div", q_sel("body .status_area"))
-			statusbox.classList.add("status_box")
-		}
+	window.add_status = function(html) {
+		var status_area = q_sel("body .status_area")
 		
-		statusbox.classList.remove("success")
-		statusbox.classList.remove("error")
-		statusbox.classList.remove("hide")
-		statusbox.innerHTML = text
+		var box = add("div", status_area, html)
 
-		statusbox.onclick = hide_status
+		box.onclick = function() { box.classList.add("hide") }
+		box.classList.add("status_box")
+
+		var status = {}
+
+		status.update = function(html) { 
+			box.classList.remove("hide")
+			box.innerHTML = html
+		}
+
+		status.remove = function() {
+			box.remove()
+		}
+
+		status.box = box
+
+		return status
 	}
 
-	window.hide_status = function() {
-		statusbox.classList.add("hide")
+	window.success = function(html) {
+		var status = add_status(html)
+
+		status.box.classList.add("success")
+		setTimeout(status.remove, 5000)
+
+		return status
+	}
+
+	window.error = function(html) {
+		var status = add_status(html)
+
+		status.box.classList.add("error")
+
+		return status
 	}
 
 	// https://stackoverflow.com/a/34278578
@@ -1274,7 +1284,7 @@ ias.cardnote = function() {
 					input.type = "checkbox"
 					label.onclick = function() { input.click() }
 
-					var tags = add("div", content)
+					var tags = add("div", content, "Stand by...")
 
 					return { title: title, score: score, tags: tags }
 				}
@@ -1890,7 +1900,7 @@ ias.networking = function() {
 	//
 	// ==============================================================================
 
-	// Download some data as a file
+	// Show a file download popup
 	this.download = function(data, name) {
 		var type = "text/html";
 		var blob = new Blob([data], {'type': type});
@@ -1940,24 +1950,32 @@ ias.networking = function() {
 	//
 	// It will crash.
 	this.get = function(address, callback_ready, type = "text") {
-		var xhr = new XMLHttpRequest();
+		var xhr = new XMLHttpRequest()
+		var status = add_status("Downloading [" + address + "]")
 
 		xhr.onload = async function() {
-			callback_ready(xhr.response)
+			status.remove()
+
+			if (xhr.status == 200) {
+				callback_ready(xhr.response)
+			} else {
+				error(locale.server_error + "<hr>" + locale.error_code + xhr.status + "<br>" + locale.address + address)
+			}
 		}
 
 		xhr.onprogress = function(event) {
-			show_status("Downloading [" + address + "]: <br><div class=progress><div class=bar style='width: " + (event.loaded / event.total * 100) + "%;'></div>" + Math.round(event.loaded / 1024) + "KB</div>")
+			status.update("Downloading [" + address + "]: <br><div class=progress><div class=bar style='width: " + (event.loaded / event.total * 100) + "%;'></div>" + Math.round(event.loaded / 1024) + "KB</div>")
 		}
 
 		xhr.onerror = function(event) {
-			error(locale.network_error)
+			error("Downloading [" + address + "]: <br>" + locale.network_error)
+			status.remove()
 		}
 
-		xhr.open('GET', address, true);
-		//xhr.overrideMimeType("application/json");
+		xhr.open('GET', address, true)
+		//xhr.overrideMimeType("application/json")
 		xhr.responseType = type
-		xhr.send(null);
+		xhr.send(null)
 	}
 	// ==============================================================================
 }
@@ -2045,7 +2063,7 @@ ias.singlefile_saver = function() {
 				return
 			}
 		} else {
-			alert("Warning! External dependencies.\n\nFollowing files are not integrated into the unified HTML at this time:\n - night.css\n - day.css\n - lunr.js\n\nYou'll need to download them separately and place them next to the .html file.")
+			alert("Warning! External dependencies.\n\nFollowing files are not integrated into the unified HTML at this time:\n - style.css\n - night.css\n - day.css\n - lunr.js\n\nYou'll need to download them separately and place them next to the .html file.")
 			networking.download(this.build_file_text(), "ias.html")
 		}
 
@@ -2959,12 +2977,6 @@ var display = q_sel("#interactive_console_display")
 var input = q_sel("#interactive_console_input")
 
 input.style.height = "1.2em"
-input.style.width = "100%"
-input.style.padding = "0px"
-input.style.border = "none"
-input.style.color = "white"
-input.style.backgroundColor = "#333333"
-input.style.overflow = "auto"
 input.oninput = input_keyhit
 
 display.style.maxHeight = "15em"
@@ -3277,12 +3289,12 @@ run()
 Every app has access to a \`note\` variable which provides the app with a way to control its note. Here are some of the APIs:
 
 \`\`\`
-set_body(text)		Set the body
-set_title(text)		Set the title
-set_date(text)		Set the date
-reload()			Reload the note
-scroll_to()		Scroll to the note
-...			...
+set_body(text)				Set the body
+set_title(text)				Set the title
+set_date(text)				Set the date
+reload()				Reload the note
+scroll_to()				Scroll to the note
+...					...
 \`\`\`
 
 To turn a note into an app, set its parser to "JavaScript / App" in the editor.
@@ -3303,6 +3315,28 @@ note.set_body(html)
 Try it!`,
 created:1609225934547,
 modified:1618655797948,
+parser:`Markdown`
+},
+{
+title:`IAS`,
+text:`Hello!
+
+Information Assistance System, or IAS for short, is a system for data storage and organization.
+
+It is a note-taking application and a modular JavaScript scratchpad. There's even a tiny bit of recommender system in it, as it can make suggestions for what to read.
+
+It was created under the premise of writing software that one uses every day. While this served me well, it probably means that /you/ should consider writing /your own/ digital notekeeping software, in the event that you do keep notes regularly.
+
+I used to use a simple text file, an approach that seems fairly popular. It worked well at first, but then I ran into scaling problems: reviewing it is an O(n) operation, and I ain't got no time to read over the entire 100KB file. What is the point of notes without an occasional review session?
+
+So I wrote IAS to help me out.
+
+Here's what it does:
+Distillation	Automatic tags via TF-IDF
+Sparsity		Suggest a few random notes
+Sorting		Show recently updated notes first`,
+created:1618657487198,
+modified:1643128663726,
 parser:`Markdown`
 },
 {
@@ -3510,28 +3544,6 @@ modified:1627989359662,
 parser:`Markdown`
 },
 {
-title:`IAS`,
-text:`Hello!
-
-Information Assistance System, or IAS for short, is a system for data storage and organization.
-
-It is a note-taking application and a modular JavaScript scratchpad. There's even a tiny bit of recommender system in it, as it can make suggestions for what to read.
-
-It was created under the premise of writing software that one uses every day. While this served me well, it probably means that /you/ should consider writing /your own/ digital notekeeping software, in the event that you do keep notes regularly.
-
-I used to use a simple text file, an approach that seems fairly popular. It worked well at first, but then I ran into scaling problems: reviewing it is an O(n) operation, and I ain't got no time to read over the entire 100KB file. What is the point of notes without an occasional review session?
-
-So I wrote IAS to help me out.
-
-Here's what it does:
-Distillation	Automatic tags via TF-IDF
-Sparsity		Suggest a few random notes
-Sorting		Show recently updated notes first`,
-created:1618657487198,
-modified:1643128663726,
-parser:`Markdown`
-},
-{
 title:`Search`,
 text:`if ("lunr" in search) {
 	show_search_prompt()
@@ -3683,15 +3695,13 @@ async function download_index(url) {
 		log("All OK")
 	}
 
-
-	show_status("Downloading ["+url+"]...")
 	var time_dl_start_ms = performance.now()
 
 	networking.get(url, dl_complete, "json")
 
 	function dl_complete(idx) {
 		var time_dl_done_ms = performance.now()
-		show_status("Download and parsing complete; generating secondary and tertiary indices...")
+		var status = add_status("Download and parsing complete; generating secondary and tertiary indices...")
 		
 		// Allow browser 50ms to catch up
 		// Status messages get lost otherwise
@@ -3703,7 +3713,8 @@ async function download_index(url) {
 
 			var time_init_ok_ms = performance.now()
 
-			success("Index installed!<br>" + (time_dl_done_ms - time_dl_start_ms) + "ms to download and parse<br>" + (time_init_ok_ms - time_dl_done_ms) + "ms to initialize lunr")
+			status.update("Index installed!<br>" + (time_dl_done_ms - time_dl_start_ms) + "ms to download and parse<br>" + (time_init_ok_ms - time_dl_done_ms) + "ms to initialize lunr")
+			setTimeout(status.remove, 5000)
 
 			show_search_prompt()
 		}
@@ -3897,12 +3908,17 @@ function lazy_append(titles, icon, parent, complete_fn, depth = 0) {
 
 `,
 created:1610984355543,
-modified:1643128919418,
+modified:1646142645169,
 parser:`App`
 },
 {
 title:`Updates`,
-text:`> January 26, 2022: [ Anniversary Update ]
+text:`> March 1, 2022: [ What a disaster ]
+
+Highlights:
+ - A copy that is hosted on IPFS in full
+
+> January 26, 2022: [ Anniversary Update ]
 
 Highlights:
  - Filter out small documents using "minsize:30000"
@@ -4299,8 +4315,18 @@ Other:
 > January 26, 2021: [ Initial release ]
 `,
 created:1614426404343,
-modified:1643131466111,
+modified:1646143509887,
 parser:`Text`
+},
+{
+title:`⚠️ Notice`,
+text:`Fallback version in case GitHub starts nuking stuff:
+IAS1	[](https://cloudflare-ipfs.com/ipfs/QmcsoHGU3Vsfg9HteRa63iMTeLDHG72CYYWeQkcd8Wdsfy/)
+IAS2	[](https://cloudflare-ipfs.com/ipfs/Qmezj9DqeHDk5gKdBwdek2bdjzTgp9gQeg636SZnzm3zTh/)
+`,
+created:1646136793730,
+modified:1646147231721,
+parser:`Markdown`
 }]
 
 </script>
