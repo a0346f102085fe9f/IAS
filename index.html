@@ -39,8 +39,8 @@ ias.locale = function() {
 	this.saving_error = "Unable to save!"
 	this.saving_ok = "Saved."
 
-	this.network_error = "Network error"
-	this.server_error = "Server error"
+	this.network_error = "Networking: network error"
+	this.server_error = "Networking: server error"
 	this.error_code = "Error code: "
 	this.address = "Address: "
 
@@ -467,7 +467,6 @@ ias.bootloader = function() {
 		navbar.init()
 		dropdown.init()
 
-		story.open_note("⚠️ Notice")
 		story.open_note("Welcome")
 		story.open_note("Search")
 
@@ -544,9 +543,10 @@ ias.utils = function() {
 	// - add(tag, parent, html)
 	// - adjacent_add(tagname, target, where, id)
 	// - strectes_beyond_viewport(element)
-	// - add_status(html)
+	// - show_status(html)
 	// - success(html)
 	// - error(html)
+	// - hide_status()
 	// - format_time(timestamp)
 	// - get_new_title()
 	// - apply_css(css)
@@ -605,45 +605,35 @@ ias.utils = function() {
 	}
 
 	// Display a status box in the status area
-	window.add_status = function(html) {
-		var status_area = q_sel("body .status_area")
+	window.show_status = function(html) {
+		if ("statusbox" in window === false) {
+			window.statusbox = add("div", q_sel("body .status_area"))
+			statusbox.classList.add("status_box")
+		}
 		
-		var box = add("div", status_area, html)
+		statusbox.classList.remove("success")
+		statusbox.classList.remove("error")
+		statusbox.classList.remove("hide")
+		statusbox.innerHTML = html
 
-		box.onclick = function() { box.classList.add("hide") }
-		box.classList.add("status_box")
-
-		var status = {}
-
-		status.update = function(html) { 
-			box.classList.remove("hide")
-			box.innerHTML = html
-		}
-
-		status.remove = function() {
-			box.remove()
-		}
-
-		status.box = box
-
-		return status
+		statusbox.onclick = hide_status
 	}
 
 	window.success = function(html) {
-		var status = add_status(html)
+		show_status(html)
 
-		status.box.classList.add("success")
-		setTimeout(status.remove, 5000)
-
-		return status
+		statusbox.classList.add("success")
+		setTimeout(hide_status, 5000)
 	}
 
 	window.error = function(html) {
-		var status = add_status(html)
+		show_status(html)
 
-		status.box.classList.add("error")
+		statusbox.classList.add("error")
+	}
 
-		return status
+	window.hide_status = function() {
+		statusbox.classList.add("hide")
 	}
 
 	// https://stackoverflow.com/a/34278578
@@ -1950,12 +1940,9 @@ ias.networking = function() {
 	//
 	// It will crash.
 	this.get = function(address, callback_ready, type = "text") {
-		var xhr = new XMLHttpRequest()
-		var status = add_status("Downloading [" + address + "]")
+		var xhr = new XMLHttpRequest();
 
 		xhr.onload = async function() {
-			status.remove()
-
 			if (xhr.status == 200) {
 				callback_ready(xhr.response)
 			} else {
@@ -1964,18 +1951,17 @@ ias.networking = function() {
 		}
 
 		xhr.onprogress = function(event) {
-			status.update("Downloading [" + address + "]: <br><div class=progress><div class=bar style='width: " + (event.loaded / event.total * 100) + "%;'></div>" + Math.round(event.loaded / 1024) + "KB</div>")
+			show_status("Downloading [" + address + "]: <br><div class=progress><div class=bar style='width: " + (event.loaded / event.total * 100) + "%;'></div>" + Math.round(event.loaded / 1024) + "KB</div>")
 		}
 
 		xhr.onerror = function(event) {
-			error("Downloading [" + address + "]: <br>" + locale.network_error)
-			status.remove()
+			error(locale.network_error)
 		}
 
-		xhr.open('GET', address, true)
-		//xhr.overrideMimeType("application/json")
+		xhr.open('GET', address, true);
+		//xhr.overrideMimeType("application/json");
 		xhr.responseType = type
-		xhr.send(null)
+		xhr.send(null);
 	}
 	// ==============================================================================
 }
@@ -3323,20 +3309,9 @@ text:`Hello!
 
 Information Assistance System, or IAS for short, is a system for data storage and organization.
 
-It is a note-taking application and a modular JavaScript scratchpad. There's even a tiny bit of recommender system in it, as it can make suggestions for what to read.
-
-It was created under the premise of writing software that one uses every day. While this served me well, it probably means that /you/ should consider writing /your own/ digital notekeeping software, in the event that you do keep notes regularly.
-
-I used to use a simple text file, an approach that seems fairly popular. It worked well at first, but then I ran into scaling problems: reviewing it is an O(n) operation, and I ain't got no time to read over the entire 100KB file. What is the point of notes without an occasional review session?
-
-So I wrote IAS to help me out.
-
-Here's what it does:
-Distillation	Automatic tags via TF-IDF
-Sparsity		Suggest a few random notes
-Sorting		Show recently updated notes first`,
+It is a note-taking application and a modular JavaScript scratchpad. There's even a tiny bit of recommender system in it, as it can make suggestions for what to read.`,
 created:1618657487198,
-modified:1643128663726,
+modified:1618660432904,
 parser:`Markdown`
 },
 {
@@ -3534,28 +3509,15 @@ modified:1633572303542,
 parser:`Markdown`
 },
 {
-title:`Welcome`,
-text:`Half-baked software ahead. _There are bugs._
----
-[GitHub](https://github.com/a0346f102085fe9f/IAS/) / [Updates] / [IAS]
-`,
-created:1611675231500,
-modified:1627989359662,
-parser:`Markdown`
-},
-{
 title:`Search`,
 text:`if ("lunr" in search) {
 	show_search_prompt()
 } else {
 	show_index_download_prompt()
 }
-
 function show_index_download_prompt() {
 	note.set_body("<p>The search needs to download one of the indexes to work.</p><p>It can take up to a minute to evaluate an index, depending on your device.</p><p>Click one of the buttons below:</p>")
-
 	var indexes = []
-
 	indexes.push( {title: "Index A 	64.0M 	Full Anonymous directory index.", 								url: "idx/index_a.json"} )
 	indexes.push( {title: "Index B 	56.0M 	The 5 largest directories, full of non-pony crap.",	 					url: "idx/index_b.json"} )
 	indexes.push( {title: "Index C 	55.8M 	Next 25 directories.",	 										url: "idx/index_c.json"} )
@@ -3572,90 +3534,65 @@ function show_index_download_prompt() {
 	indexes.push( {title: "Pile	481.8M 	Full poneb.in dump.\\n2/3\\t\\tYears 2014 - 2017.\\n\\t\\tStemmer disabled.\\n\\t\\tHosted on IPFS.", 	url: "https://ipfs.io/ipfs/QmaydmgPzWVMgUYpBqmPXE58P2DtVwdJhdPBQKDCNnhrqB/pile_2014_2017.json"} )
 	indexes.push( {title: "Pile	133.1M 	Full poneb.in dump.\\n3/3\\t\\tYears 2018 - 2020.\\n\\t\\tStemmer disabled.\\n\\t\\tHosted on IPFS.", 	url: "https://cloudflare-ipfs.com/ipfs/QmaydmgPzWVMgUYpBqmPXE58P2DtVwdJhdPBQKDCNnhrqB/pile_2018_2020.json"} )
 	indexes.push( {title: "Ponepaste  69.4M 	Ponepaste.org backup as of 2021.05.19", 							url: "idx/index_ponepaste.json"} )
-
 	for (var i = 0; i < indexes.length; i++) {
 		var index = indexes[i]
-
 		var button = add("button", note.dom.body)
 		button.style.textAlign = "start"
 		button.innerText = index.title
 		button.index_url = index.url
 		button.onclick = handle_click
-
 		add("br", note.dom.body)
 	}
-
 }
-
 function handle_click(event) {
 	download_index(event.target.index_url)
 }
-
 async function download_index(url) {
-
 	// Install the search initialization function
 	search.init_lunr_from_prebaked = function() {
 		log("Lunr prebaked init")
-
 		// Poneb.in and ponepaste.org have different naming conventions
 		// We need to handle both
 		function link_ponebin(title) {
 			var paste_id = (title.slice(title.lastIndexOf("-") + 1)).slice(0, -4)
 			var link = "https://poneb.in/" + paste_id
-
 			return "Open at poneb.in: <a href=\\""+link+"\\">"+link+"</a>\\n\\nThe pastes here... they are too hot for GitHub.\\n\\nEven though you see no text, More -> \\"Find similar notes\\" button still functions as intended!"
 		}
-
 		function link_ponepaste(title) {
 			var paste_id = parseInt(title)
 			var link = "https://ponepaste.org/" + paste_id
-
 			return "Open at ponepaste.org: <a href=\\""+link+"\\">"+link+"</a>\\n\\nThe pastes here... they are too hot for GitHub.\\n\\nEven though you see no text, More -> \\"Find similar notes\\" button still functions as intended!"
 		}
-
 		var link_fn = 0
-
 		// Decide based on the index filename
 		if (url.endsWith("index_ponepaste.json")) {
 			link_fn = link_ponepaste
 		} else {
 			link_fn = link_ponebin
 		}
-
 		// All of the stuff should've already been set
 		// Except search.idx._documents and gid
 		// Manually bitbang some more stuff into existence
 		search.idx._documents = {}
-
 		var len = search.idx.documentCount
-
 		for (var i = 0; i < len; i++) {
 			var title = search.idx.id_to_filename[i]
-
 			var note = core.create_note(title)
 			note.text = link_fn(title)
-
 			search.idx._documents[i] = {note: note}
 		}
-
 		search.idx.gid = len
-
 		
 		var enable_stemmer = true
-
 		// Very special handling for the Piles
 		if (url.includes("pile"))
 			enable_stemmer = false
-
-
 		// Nuke if exists
 		delete search.lunr
-
 		search.lunr = lunr(function () {
 			// Reset the default pipelines
 			this.pipeline.reset()
 			this.searchPipeline.reset()
-
 			// Then set them up again, either with or without the stemmer
 			if (enable_stemmer) {
 				this.pipeline.add(
@@ -3663,7 +3600,6 @@ async function download_index(url) {
 					lunr.stopWordFilter,
 					search.partial_stemmer
 				)
-
 				this.searchPipeline.add(
 					search.partial_stemmer
 				)
@@ -3672,17 +3608,12 @@ async function download_index(url) {
 					lunr.trimmer,
 					lunr.stopWordFilter
 				)
-
 				//this.searchPipeline.add()
 			}
-
-
-
 			// Only one field to index
 			// Shortest possible name to use less RAM
 			this.field('a')
 			this.ref('id')
-
 			this.invertedIndex 			= search.idx.invertedIndex
 			this.fieldTermFrequencies 	= search.idx.fieldTermFrequencies
 			this.fieldLengths 			= search.idx.fieldLengths
@@ -3690,36 +3621,27 @@ async function download_index(url) {
 			this.documentCount 			= search.idx.documentCount
 			this.termIndex 				= search.idx.termIndex
 		})
-
 		log("Complete!")
 		log("All OK")
 	}
-
+	show_status("Downloading ["+url+"]...")
 	var time_dl_start_ms = performance.now()
-
 	networking.get(url, dl_complete, "json")
-
 	function dl_complete(idx) {
 		var time_dl_done_ms = performance.now()
-		var status = add_status("Download and parsing complete; generating secondary and tertiary indices...")
+		show_status("Download and parsing complete; generating secondary and tertiary indices...")
 		
 		// Allow browser 50ms to catch up
 		// Status messages get lost otherwise
 		setTimeout(lunr_regen, 50)
-
 		function lunr_regen() {
 			search.idx = idx
 			search.init_lunr_from_prebaked()
-
 			var time_init_ok_ms = performance.now()
-
-			status.update("Index installed!<br>" + (time_dl_done_ms - time_dl_start_ms) + "ms to download and parse<br>" + (time_init_ok_ms - time_dl_done_ms) + "ms to initialize lunr")
-			setTimeout(status.remove, 5000)
-
+			success("Index installed!<br>" + (time_dl_done_ms - time_dl_start_ms) + "ms to download and parse<br>" + (time_init_ok_ms - time_dl_done_ms) + "ms to initialize lunr")
 			show_search_prompt()
 		}
 	}
-
 }
 
 function show_search_prompt() {
@@ -3908,8 +3830,28 @@ function lazy_append(titles, icon, parent, complete_fn, depth = 0) {
 
 `,
 created:1610984355543,
-modified:1646142645169,
+modified:1646577902351,
 parser:`App`
+},
+{
+title:`⚠️ Notice`,
+text:`Fallback version in case GitHub starts nuking stuff:
+[IAS1](https://cloudflare-ipfs.com/ipfs/QmcsoHGU3Vsfg9HteRa63iMTeLDHG72CYYWeQkcd8Wdsfy/)
+[IAS2](https://cloudflare-ipfs.com/ipfs/Qmezj9DqeHDk5gKdBwdek2bdjzTgp9gQeg636SZnzm3zTh/)
+`,
+created:1646136793730,
+modified:1646577759617,
+parser:`Markdown`
+},
+{
+title:`Welcome`,
+text:`Half-baked software ahead. _There are bugs._
+---
+[GitHub](https://github.com/a0346f102085fe9f/IAS/) / [Updates] / [IAS]
+`,
+created:1611675231500,
+modified:1627989359662,
+parser:`Markdown`
 },
 {
 title:`Updates`,
@@ -4317,16 +4259,6 @@ Other:
 created:1614426404343,
 modified:1646143509887,
 parser:`Text`
-},
-{
-title:`⚠️ Notice`,
-text:`Fallback version in case GitHub starts nuking stuff:
-IAS1	[](https://cloudflare-ipfs.com/ipfs/QmcsoHGU3Vsfg9HteRa63iMTeLDHG72CYYWeQkcd8Wdsfy/)
-IAS2	[](https://cloudflare-ipfs.com/ipfs/Qmezj9DqeHDk5gKdBwdek2bdjzTgp9gQeg636SZnzm3zTh/)
-`,
-created:1646136793730,
-modified:1646147231721,
-parser:`Markdown`
 }]
 
 </script>

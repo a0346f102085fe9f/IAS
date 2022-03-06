@@ -403,6 +403,7 @@ content .box {
 	
 	top: 0px;
 	right: 0px;
+	margin: 1em;
 
 	z-index: 10;
 }
@@ -412,7 +413,6 @@ content .box {
 	min-width: 15em;
 
 	padding: 1em;
-	margin: 1em;
 
 	border-radius: 5px;
 }
