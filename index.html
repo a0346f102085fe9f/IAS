@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!-- IAS -->
 <!-- JUMP TO BOTTOM OF THE FILE TO FIND THE ENTRY POINT -->
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>IAS</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="night.css" id="theme"><link rel="stylesheet" href="tags.css"></head><body><nav><div class="nav_topbar"><div class="nav_buttons inline_buttons"></div><input type="text" class="nav_search"></div><div class="nav_dropdown"></div></nav><div class="status_area"></div><content><noscript><div class="box"><p>Can't work without JavaScript, unfortunately.</p></div></noscript></content>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>IAS</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="palette_a.css" id="theme"><link rel="stylesheet" href="tags.css"></head><body><nav><div class="nav_topbar"><div class="nav_buttons inline_buttons"></div><input type="text" class="nav_search"></div><div class="nav_dropdown"></div></nav><div class="status_area"></div><content><noscript><div class="box"><p>Can't work without JavaScript, unfortunately.</p></div></noscript></content>
 <script src="lunr.js" type="text/javascript"></script>
 <script>
 "use strict";
@@ -825,13 +825,13 @@ ias.cardnote = function() {
 	// - link(title)
 	// - editor.disable_wrap()
 	// - editor.enable_wrap()
-	// - toolbar.display_default_toolbar()						TOOLBAR PRESET
-	// - toolbar.display_editing_toolbar()						TOOLBAR PRESET
-	// - toolbar.display_temporary_toolbar()					TOOLBAR PRESET
-	// - toolbar.display_suggestion_toolbar()					TOOLBAR PRESET
-	// - toolbar.add_toolbar_button(name, text)
-	// - toolbar.add_menu_button(name, text)
-	// - toolbar.clear_buttons()
+	// - tools.display_default_tools()					TOOL STRIP PRESET
+	// - tools.display_editing_tools()					TOOL STRIP PRESET
+	// - tools.display_temporary_tools()				TOOL STRIP PRESET
+	// - tools.display_suggestion_tools()				TOOL STRIP PRESET
+	// - tools.add_tool_button(name, text)
+	// - tools.add_menu_button(name, text)
+	// - tools.clear_buttons()
 	// - more()											BUTTON HANDLER
 	// - edit()											BUTTON HANDLER
 	// - close()										BUTTON HANDLER
@@ -860,15 +860,15 @@ ias.cardnote = function() {
 		note.editor.disable_wrap = disable_wrap
 		note.editor.enable_wrap = enable_wrap
 
-		// Toolbar subfolder
-		note.toolbar = {}
-		note.toolbar.display_default_toolbar = display_default_toolbar
-		note.toolbar.display_editing_toolbar = display_editing_toolbar
-		note.toolbar.display_temporary_toolbar = display_temporary_toolbar
-		note.toolbar.display_suggestion_toolbar = display_suggestion_toolbar
-		note.toolbar.add_toolbar_button = add_toolbar_button
-		note.toolbar.add_menu_button = add_menu_button
-		note.toolbar.clear_buttons = clear_buttons
+		// Tool strip + menu subfolder
+		note.tools = {}
+		note.tools.display_default_tools = display_default_tools
+		note.tools.display_editing_tools = display_editing_tools
+		note.tools.display_temporary_tools = display_temporary_tools
+		note.tools.display_suggestion_tools = display_suggestion_tools
+		note.tools.add_tool_button = add_tool_button
+		note.tools.add_menu_button = add_menu_button
+		note.tools.clear_buttons = clear_buttons
 
 		note.reload = reload
 
@@ -905,7 +905,7 @@ ias.cardnote = function() {
 		var tools 		= add("div", header)
 		var date 		= add("div", top)
 
-		// Div to store toolbar buttons
+		// Div to store tool buttons
 		var buttons 	= add("div", tools)
 
 		// More menu
@@ -1005,7 +1005,7 @@ ias.cardnote = function() {
 		function set_body(text) 	{ body.innerHTML 	= text }
 
 		function scroll_to() {
-			note.dom.box.scrollIntoView({behavior: "smooth", block: "nearest"})
+			note.dom.header.scrollIntoView({behavior: "smooth", block: "center"})
 		}
 
 		function blink() {
@@ -1025,13 +1025,13 @@ ias.cardnote = function() {
 		}
 		
 		//
-		// STAGE 3: Toolbar functions
+		// STAGE 3: Tool strip functions
 		//
 
 		// Object to house the buttons
 		note.buttons = {}
 
-		// Removes all buttons from the toolbar and the menu
+		// Removes all buttons from the tool strip and the menu
 		function clear_buttons() {
 			for (var name in note.buttons) {
 				note.buttons[name].delete_button()
@@ -1062,19 +1062,19 @@ ias.cardnote = function() {
 		}
 
 		// Helpers to add:
-		// 1. A toolbar button
-		// 2. A menu button
-		function add_toolbar_button(name, text) { add_button(name, text, buttons) }
+		// 1. A tool strip button
+		// 2. A tool menu button
+		function add_tool_button(name, text) { add_button(name, text, buttons) }
 		function add_menu_button(name, text) 	{ add_button(name, text, menu) }
 
-		// Default toolbar
+		// Default tool strip
 		// Tools feature the "close", "edit" and "more" buttons (At least for this pathfinder version)
-		function display_default_toolbar() {
+		function display_default_tools() {
 			clear_buttons()
 
-			add_toolbar_button("more", "More")
-			add_toolbar_button("edit", "Edit")
-			add_toolbar_button("close", "Close")
+			add_tool_button("more", "More")
+			add_tool_button("edit", "Edit")
+			add_tool_button("close", "Close")
 
 			add_menu_button("find_similar", "Find similar notes")
 			add_menu_button("export", "Export note")
@@ -1086,31 +1086,31 @@ ias.cardnote = function() {
 			}
 		}
 
-		// Editing toolbar
+		// Editing tool strip
 		// Tools feature the "delete", "abort" and "save" buttons
-		function display_editing_toolbar() {
+		function display_editing_tools() {
 			clear_buttons()
 
-			add_toolbar_button("delete", "Delete")
-			add_toolbar_button("abort", "Abort")
-			add_toolbar_button("save", "Save")
+			add_tool_button("delete", "Delete")
+			add_tool_button("abort", "Abort")
+			add_tool_button("save", "Save")
 		}
 
-		// Temporary note toolbar
+		// Temporary note tool strip
 		// Only the "close" button
-		function display_temporary_toolbar() {
+		function display_temporary_tools() {
 			clear_buttons()
 
-			add_toolbar_button("close", "Close")
+			add_tool_button("close", "Close")
 		}
 
-		// Suggested note toolbar
+		// Suggested note tool strip
 		// "Create" and "close" buttons
-		function display_suggestion_toolbar() {
+		function display_suggestion_tools() {
 			clear_buttons()
 
-			add_toolbar_button("create", "Create")
-			add_toolbar_button("close", "Close")
+			add_tool_button("create", "Create")
+			add_tool_button("close", "Close")
 		}
 
 		//
@@ -1132,7 +1132,7 @@ ias.cardnote = function() {
 
 			// Enter editing mode
 			note.edit = function() { 
-				display_editing_toolbar() 
+				display_editing_tools() 
 
 				// Pull the unprocessed text (pre-markdown or pre-execution)
 				var raw_text = core.get_note_text(note.info.title)
@@ -1166,7 +1166,7 @@ ias.cardnote = function() {
 
 			// Abort editing
 			note.abort = function() { 
-				display_default_toolbar()
+				display_default_tools()
 
 				title.contentEditable = false
 				title.classList.remove("editing")
@@ -1258,23 +1258,14 @@ ias.cardnote = function() {
 
 				// Add a new entry HTML structure
 				function add_entry() {
-					var div = add("div", entries)
+					var details = add("details", entries)
+					var summary = add("summary", details)
 
-					div.classList.add("spoiler")
+					var title = add("span", summary)
+					var score = add("span", summary)
+					var tags = add("div", details, "Stand by...")
 
-					// Spoiler structure
-					var input = add("input", div)
-					var header = add("div", div)
-					var content = add("div", div)
-
-					var label = add("label", header)
-					var title = add("span", header)
-					var score = add("span", header)
-
-					input.type = "checkbox"
-					label.onclick = function() { input.click() }
-
-					var tags = add("div", content, "Stand by...")
+					score.classList.add("flr")
 
 					return { title: title, score: score, tags: tags }
 				}
@@ -1594,7 +1585,7 @@ ias.story = function() {
 	this.create_temporary_note = function(after = null) {
 		var note = story.spawn_box(after)
 
-		note.toolbar.display_temporary_toolbar()
+		note.tools.display_temporary_tools()
 		note.set_title("<i>Temporary note</i>")
 		note.set_date(utils.format_time( Date.now() ))
 
@@ -1605,7 +1596,7 @@ ias.story = function() {
 	this.suggest_note = function(title, after) {
 		var note = story.spawn_box(after)
 
-		note.toolbar.display_suggestion_toolbar()
+		note.tools.display_suggestion_tools()
 
 		note.set_title(title.italics())
 		note.set_date(utils.format_time( Date.now() ))
@@ -1791,14 +1782,15 @@ ias.navbar = function() {
 	}
 
 	// Theme switching
-	navbar.switch_theme = function() {
-		if (navbar.current_theme === "night.css") {
-			navbar.current_theme = "day.css"
-		} else {
-			navbar.current_theme = "night.css"
-		}
+	var theme_queue = ["palette_b.css", "palette_c.css", "palette_a.css"]
 
-		utils.apply_css(navbar.current_theme)
+	navbar.switch_theme = function() {
+		var theme = theme_queue.shift()
+
+		// Loop the queue around
+		theme_queue.push(theme)
+
+		utils.apply_css(theme)
 	}
 
 	// ==============================================================================
@@ -1998,7 +1990,7 @@ ias.singlefile_saver = function() {
 	var js_open = "<script>\n\"use strict\";\n\n"
 	var js_close = "</" + "script>\n" 
 
-	this.html_template_start = `<!DOCTYPE html>\n<!-- IAS -->\n<!-- JUMP TO BOTTOM OF THE FILE TO FIND THE ENTRY POINT -->\n<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>IAS</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="night.css" id="theme"><link rel="stylesheet" href="tags.css"></head><body><nav><div class="nav_topbar"><div class="nav_buttons inline_buttons"></div><input type="text" class="nav_search"></div><div class="nav_dropdown"></div></nav><div class="status_area"></div><content><noscript><div class="box"><p>Can't work without JavaScript, unfortunately.</p></div></noscript></content>\n${"<"}script src="lunr.js" type="text/javascript">${"</"}script>\n${js_open}// Source object\n// Stores the source code of the API Servers / components\n// bootloader.init() will initialize them:\n// - ias.core -> window.core\n// - ias.story -> window.story\n// - ias.locale -> window.locale\n// - etc...\n//\n// Only after initialization can you use them!\n//\nvar ias = {}\n${js_close}\n`
+	this.html_template_start = `<!DOCTYPE html>\n<!-- IAS -->\n<!-- JUMP TO BOTTOM OF THE FILE TO FIND THE ENTRY POINT -->\n<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>IAS</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="palette_a.css" id="theme"><link rel="stylesheet" href="tags.css"></head><body><nav><div class="nav_topbar"><div class="nav_buttons inline_buttons"></div><input type="text" class="nav_search"></div><div class="nav_dropdown"></div></nav><div class="status_area"></div><content><noscript><div class="box"><p>Can't work without JavaScript, unfortunately.</p></div></noscript></content>\n${"<"}script src="lunr.js" type="text/javascript">${"</"}script>\n${js_open}// Source object\n// Stores the source code of the API Servers / components\n// bootloader.init() will initialize them:\n// - ias.core -> window.core\n// - ias.story -> window.story\n// - ias.locale -> window.locale\n// - etc...\n//\n// Only after initialization can you use them!\n//\nvar ias = {}\n${js_close}\n`
 	this.html_template_end = `</body></html>`
 	this.entry_point_template = `${js_open}${this.make_banner("IAS entry point")}var bootloader = new ias.bootloader()\nbootloader.init()\n${js_close}`
 
@@ -2049,7 +2041,7 @@ ias.singlefile_saver = function() {
 				return
 			}
 		} else {
-			alert("Warning! External dependencies.\n\nFollowing files are not integrated into the unified HTML at this time:\n - style.css\n - night.css\n - day.css\n - lunr.js\n\nYou'll need to download them separately and place them next to the .html file.")
+			alert("Warning! External dependencies.\n\nFollowing files are not integrated into the unified HTML at this time:\n - style.css\n - palette_a.css\n - palette_b.css\n - palette_c.css\n - lunr.js\n\nYou'll need to download them separately and place them next to the .html file.")
 			networking.download(this.build_file_text(), "ias.html")
 		}
 
@@ -3219,7 +3211,15 @@ Snarkdown never supported tables, but you can use HTML!
 
 # Images
 ---
-Images can be added using \`![Alt text](URL)\` or via an HTML tag.`,
+Images can be added using \`![Alt text](URL)\` or via an HTML tag.
+
+Additionally, you can directly embed SVGs:
+
+<svg fill="skyblue">
+	<circle r="50" cx="50%" cy="50%"/>
+	<circle r="15" cx="50%" cy="50%" stroke="black" stroke-width="5"/>
+	<line x1="150" y1="100" x2="200" y2="120" stroke="slategray" stroke-width="10"/>
+</svg>`,
 created:1617529440466,
 modified:1617532884260,
 parser:`Markdown`
@@ -3509,15 +3509,28 @@ modified:1633572303542,
 parser:`Markdown`
 },
 {
+title:`⚠️ Notice`,
+text:`Fallback version in case GitHub starts nuking stuff:
+[IAS1](https://cloudflare-ipfs.com/ipfs/QmcsoHGU3Vsfg9HteRa63iMTeLDHG72CYYWeQkcd8Wdsfy/)
+[IAS2](https://cloudflare-ipfs.com/ipfs/Qmezj9DqeHDk5gKdBwdek2bdjzTgp9gQeg636SZnzm3zTh/)
+`,
+created:1646136793730,
+modified:1646577759617,
+parser:`Markdown`
+},
+{
 title:`Search`,
 text:`if ("lunr" in search) {
 	show_search_prompt()
 } else {
 	show_index_download_prompt()
 }
+
 function show_index_download_prompt() {
 	note.set_body("<p>The search needs to download one of the indexes to work.</p><p>It can take up to a minute to evaluate an index, depending on your device.</p><p>Click one of the buttons below:</p>")
+
 	var indexes = []
+
 	indexes.push( {title: "Index A 	64.0M 	Full Anonymous directory index.", 								url: "idx/index_a.json"} )
 	indexes.push( {title: "Index B 	56.0M 	The 5 largest directories, full of non-pony crap.",	 					url: "idx/index_b.json"} )
 	indexes.push( {title: "Index C 	55.8M 	Next 25 directories.",	 										url: "idx/index_c.json"} )
@@ -3534,23 +3547,30 @@ function show_index_download_prompt() {
 	indexes.push( {title: "Pile	481.8M 	Full poneb.in dump.\\n2/3\\t\\tYears 2014 - 2017.\\n\\t\\tStemmer disabled.\\n\\t\\tHosted on IPFS.", 	url: "https://ipfs.io/ipfs/QmaydmgPzWVMgUYpBqmPXE58P2DtVwdJhdPBQKDCNnhrqB/pile_2014_2017.json"} )
 	indexes.push( {title: "Pile	133.1M 	Full poneb.in dump.\\n3/3\\t\\tYears 2018 - 2020.\\n\\t\\tStemmer disabled.\\n\\t\\tHosted on IPFS.", 	url: "https://cloudflare-ipfs.com/ipfs/QmaydmgPzWVMgUYpBqmPXE58P2DtVwdJhdPBQKDCNnhrqB/pile_2018_2020.json"} )
 	indexes.push( {title: "Ponepaste  69.4M 	Ponepaste.org backup as of 2021.05.19", 							url: "idx/index_ponepaste.json"} )
+
 	for (var i = 0; i < indexes.length; i++) {
 		var index = indexes[i]
+
 		var button = add("button", note.dom.body)
 		button.style.textAlign = "start"
 		button.innerText = index.title
 		button.index_url = index.url
 		button.onclick = handle_click
+
 		add("br", note.dom.body)
 	}
 }
+
 function handle_click(event) {
 	download_index(event.target.index_url)
 }
+
 async function download_index(url) {
+
 	// Install the search initialization function
 	search.init_lunr_from_prebaked = function() {
 		log("Lunr prebaked init")
+
 		// Poneb.in and ponepaste.org have different naming conventions
 		// We need to handle both
 		function link_ponebin(title) {
@@ -3558,41 +3578,52 @@ async function download_index(url) {
 			var link = "https://poneb.in/" + paste_id
 			return "Open at poneb.in: <a href=\\""+link+"\\">"+link+"</a>\\n\\nThe pastes here... they are too hot for GitHub.\\n\\nEven though you see no text, More -> \\"Find similar notes\\" button still functions as intended!"
 		}
+
 		function link_ponepaste(title) {
 			var paste_id = parseInt(title)
 			var link = "https://ponepaste.org/" + paste_id
 			return "Open at ponepaste.org: <a href=\\""+link+"\\">"+link+"</a>\\n\\nThe pastes here... they are too hot for GitHub.\\n\\nEven though you see no text, More -> \\"Find similar notes\\" button still functions as intended!"
 		}
+
 		var link_fn = 0
+
 		// Decide based on the index filename
 		if (url.endsWith("index_ponepaste.json")) {
 			link_fn = link_ponepaste
 		} else {
 			link_fn = link_ponebin
 		}
+
 		// All of the stuff should've already been set
 		// Except search.idx._documents and gid
 		// Manually bitbang some more stuff into existence
 		search.idx._documents = {}
+
 		var len = search.idx.documentCount
+
 		for (var i = 0; i < len; i++) {
 			var title = search.idx.id_to_filename[i]
 			var note = core.create_note(title)
 			note.text = link_fn(title)
 			search.idx._documents[i] = {note: note}
 		}
+
 		search.idx.gid = len
 		
 		var enable_stemmer = true
+
 		// Very special handling for the Piles
 		if (url.includes("pile"))
 			enable_stemmer = false
+
 		// Nuke if exists
 		delete search.lunr
+
 		search.lunr = lunr(function () {
 			// Reset the default pipelines
 			this.pipeline.reset()
 			this.searchPipeline.reset()
+
 			// Then set them up again, either with or without the stemmer
 			if (enable_stemmer) {
 				this.pipeline.add(
@@ -3610,10 +3641,12 @@ async function download_index(url) {
 				)
 				//this.searchPipeline.add()
 			}
+
 			// Only one field to index
 			// Shortest possible name to use less RAM
 			this.field('a')
 			this.ref('id')
+
 			this.invertedIndex 			= search.idx.invertedIndex
 			this.fieldTermFrequencies 	= search.idx.fieldTermFrequencies
 			this.fieldLengths 			= search.idx.fieldLengths
@@ -3621,12 +3654,16 @@ async function download_index(url) {
 			this.documentCount 			= search.idx.documentCount
 			this.termIndex 				= search.idx.termIndex
 		})
+
 		log("Complete!")
 		log("All OK")
 	}
+
 	show_status("Downloading ["+url+"]...")
+
 	var time_dl_start_ms = performance.now()
 	networking.get(url, dl_complete, "json")
+
 	function dl_complete(idx) {
 		var time_dl_done_ms = performance.now()
 		show_status("Download and parsing complete; generating secondary and tertiary indices...")
@@ -3654,7 +3691,7 @@ function show_search_prompt() {
 	note.search_results_root = add("div", note.dom.body)
 	note.search_results_drop = add("div", note.search_results_root)
 	note.search_results = add("div", note.search_results_drop)
-	note.search_tooltip = add("div", note.search_results_drop, "<hr>Prefix words with <kbd>-</kbd> to disallow them, prefix words with <kbd>+</kbd> to make them required. Use <kbd>*</kbd> for unknown letters. Add <kbd>^10</kbd> after the word to multiply the importance by 10, add <kbd>~1</kbd> for fuzzy search with a distance of 1.")
+	note.search_tooltip = add("div", note.search_results_drop, "<hr>Prefix words with <kbd>-</kbd> to disallow them, prefix words with <kbd>+</kbd> to make them required. Hit <kbd>Tab</kbd> to autocomplete. Add <kbd>^10</kbd> after the word to multiply the importance by 10, add <kbd>~1</kbd> for fuzzy search with a distance of 1.")
 
 	note.search_results_root.style.position = "relative"
 	note.search_results_drop.style.position = "absolute"
@@ -3830,35 +3867,34 @@ function lazy_append(titles, icon, parent, complete_fn, depth = 0) {
 
 `,
 created:1610984355543,
-modified:1646577902351,
+modified:1651380251107,
 parser:`App`
 },
 {
-title:`⚠️ Notice`,
-text:`Fallback version in case GitHub starts nuking stuff:
-[IAS1](https://cloudflare-ipfs.com/ipfs/QmcsoHGU3Vsfg9HteRa63iMTeLDHG72CYYWeQkcd8Wdsfy/)
-[IAS2](https://cloudflare-ipfs.com/ipfs/Qmezj9DqeHDk5gKdBwdek2bdjzTgp9gQeg636SZnzm3zTh/)
-`,
-created:1646136793730,
-modified:1646577759617,
-parser:`Markdown`
-},
-{
 title:`Welcome`,
-text:`Half-baked software ahead. _There are bugs._
+text:`Try out the new [IAS2](https://a0346f102085fe9f.github.io/IAS2/)! It relies on SPLADEv2 neural network instead of lunr.
 ---
 [GitHub](https://github.com/a0346f102085fe9f/IAS/) / [Updates] / [IAS]
 `,
 created:1611675231500,
-modified:1627989359662,
+modified:1651380625434,
 parser:`Markdown`
 },
 {
 title:`Updates`,
-text:`> March 1, 2022: [ What a disaster ]
+text:`> May 1, 2022: [ They All Look Familiar to Me ]
+
+Highlights:
+ - Link IAS2 in the Welcome note
+ - Third theme added
+	* Based on Solarized Dark
+
+
+> March 1, 2022: [ What a disaster ]
 
 Highlights:
  - A copy that is hosted on IPFS in full
+
 
 > January 26, 2022: [ Anniversary Update ]
 
@@ -4257,7 +4293,7 @@ Other:
 > January 26, 2021: [ Initial release ]
 `,
 created:1614426404343,
-modified:1646143509887,
+modified:1651383005460,
 parser:`Text`
 }]
 

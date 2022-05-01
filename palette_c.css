@@ -1,0 +1,227 @@
+/*
+	IAS Default Stylesheet C
+	Based on Solarized Dark
+*/
+
+
+/*
+ *
+ * GENERIC RULES
+ *
+ */
+body {
+	background-color: #073642;
+	color: #a5b5b5;
+}
+
+hr {
+	border-color: #a5b5b5;
+}
+
+a 						{ color: #859900; }		/* External link */
+a:hover 				{ color: #859900; }
+a.internal 				{ color: #b58900; }		/* Internal user-produced link */
+a.internal.auto 		{ color: #268bd2; }		/* Internal automatic link */
+a.internal.auto:hover 	{ color: #6c71c4; }
+
+/* Utilized by blink() */
+.attention {
+	background-color: #a5b5b5 !important;
+}
+
+
+/*
+ *
+ * TABLES
+ *
+ */
+table {
+	box-shadow: 2px 2px #586e75;
+}
+
+
+/*
+ *
+ * VARIOUS INPUT ELEMENTS
+ *
+ */
+textarea {
+	background-color: #073642;
+}
+
+input {
+	background-color: #073642;
+}
+
+select {
+	background-color: #073642;
+}
+
+
+/*
+ *
+ * CODE BLOCKS
+ *
+ */
+code {
+	background-color: #073642;
+	color: #fb4934;
+}
+
+code a {
+	color: #ff5914;
+}
+
+
+/*
+ *
+ * BUTTONS
+ *
+ */
+button {
+	background-color: #002b36;
+	border-color: #a5b5b5;
+	color: #a5b5b5;
+}
+
+button:hover {
+	background-color: #a5b5b5;
+	color: #002b36;
+}
+
+button[disable="true"] {
+	background-color: #073642;
+}
+
+button[disable="true"]:hover {
+	background-color: #073642;
+	color: #a5b5b5;
+}
+
+button.alert {
+	background: linear-gradient(#fe8019 0%, #002b36 50%);
+	border-top-color: #fe8019;
+}
+
+button.alert:hover {
+	background: linear-gradient(#fe8019 0%, #a5b5b5 50%);
+}
+
+
+/*
+ *
+ * NAVIGATION BAR
+ *
+ */
+nav {
+	background-color: #002b36;
+}
+
+.nav_dropdown {
+	background-color: inherit;
+}
+
+
+/*
+ *
+ * NOTE
+ *
+ */
+content .box {
+	background-color: #002b36;
+}
+
+.note_title {
+	color: #a5b5b5;
+}
+
+.note_date {
+	color: #586e75;
+}
+
+.editing {
+	background-color: #073642;
+}
+
+
+/*
+ *
+ * DROPDOWNS
+ *
+ */
+.dropdown {
+	background-color: #002b36;
+}
+
+
+/*
+ *
+ * STATUS- (NOTIFICATION-) BOXES
+ *
+ */
+.status_box {
+	background-color: #002b36;
+	color: #a5b5b5;
+}
+
+.status_box.success { color: #859900; }
+.status_box.error 	{ color: #dc322f; }
+
+.status_box.success hr { border-color: #859900; }
+.status_box.error 	hr { border-color: #dc322f; }
+
+
+/*
+ *
+ * PROGRESS BARS
+ *
+ */
+.progress {
+	background-color: #202020;
+}
+
+.progress .bar {
+	background-color: #ff8001;
+	mix-blend-mode: difference;
+}
+
+
+/*
+ *
+ * TAGS
+ *
+ */
+.tag {
+	background-color: #cb4b16;
+	color: #002b36;
+}
+
+
+/*
+ *
+ * DRAG-AND-DROP
+ *
+ */
+/* Drop areas all start attenting when something is being dragged over the window */
+.drag_and_drop_area.attenting {
+	background-color: #d79921;
+}
+
+/* A specific area becomes ready if something is being dragged over it in particular */
+.drag_and_drop_area.attenting.ready {
+	background-color: #98971a;
+}
+
+
+/*
+ *
+ * ADVANCED RULER
+ *
+ */
+ruler:before {
+	background-color: #a5b5b5;
+}
+
+ruler:after {
+	background-color: #a5b5b5;
+}

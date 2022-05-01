@@ -371,7 +371,7 @@ content .box {
 /*
  *
  * DROPDOWNS
- * Layout and logic
+ * Layout
  *
  */
 .dropdown_root {
@@ -381,9 +381,9 @@ content .box {
 .dropdown {
 	position: absolute;
 
+	border-radius: 0px 0px 5px 5px;
 	box-sizing: border-box;
 	padding: 0em 1em 1em 1em;
-	border-radius: 0px 0px 5px 5px;
 }
 
 .dropdown button {
@@ -395,7 +395,7 @@ content .box {
 /*
  *
  * STATUS- (NOTIFICATION-) BOXES
- * Layout and logic
+ * Layout
  *
  */
 .status_area {
@@ -491,50 +491,23 @@ content .box {
 /*
  *
  * SPOILERS
- * Layout and logic
- *
- * Sample HTML:
- * <div class="spoiler">
- *	<input type="checkbox">
- *	<div>
- *		<label></label> // Use JavaScript: label.onclick = function() { input.click() }
- *		<span>Left side header...</span>
- *		<span>Right side header...</span>
- *	</div>
- *	<div>
- *		Spoiler content...
- *	</div>
- * </div> 
+ * Layout
  *
  */
-.spoiler > input {
-	display: none;
+summary {
+	display: block;
 }
 
-.spoiler > input + div {
-	display: grid;
-	grid-template-columns: auto 1fr auto;
-	align-items: baseline;
-}
-
-.spoiler > input + div > label:before {
+summary:before {
 	content: "◇ ";
 }
 
-.spoiler > input:checked + div > label:before {
+details[open] > summary:before {
 	content: "◆ ";
 }
 
-.spoiler > input + div > label:hover:before {
+summary:hover:before, details[open] > summary:hover:before {
 	content: "◈ ";
-}
-
-.spoiler > input ~ div ~ div {
-	display: none;
-}
-
-.spoiler > input:checked ~ div ~ div {
-	display: block;
 }
 
 
