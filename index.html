@@ -31,6 +31,9 @@ ias.locale = function() {
 	this.date_format = undefined
 	this.date_options = {year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "numeric"}
 
+	this.relative_time_format = undefined
+	this.relative_time_options = { numeric: 'auto' }
+
 	this.note_missing = "A note with this title does not yet exist. Use the Create button to create it!"
 	this.new_note_title = "Note № "
 
@@ -155,6 +158,13 @@ ias.core = function() {
 	this.rename_note = function(title, new_title) {
 		var id = titles[title]
 		var note = notes[id]
+
+		// Safeguard
+		// Storage format allows for duplicate titles, but upgrades are needed elsewhere to make that work
+		if (new_title in titles) {
+			log("Refusing to rename to an alredy taken title!")
+			return
+		}
 
 		delete titles[title]
 
@@ -679,6 +689,32 @@ ias.utils = function() {
 		return new Date(timestamp).toLocaleString(locale.date_format, locale.date_options)
 	}
 
+	// Converts supplied timestamp to relative time
+	// TIMESTAMP 		RESULT
+	// 20000			"in 20 seconds"
+	// -1000			"1 second ago"
+	// -950400000		"11 days ago"
+	// https://stackoverflow.com/a/53800501
+	utils.format_relative_time = function(timestamp) {
+		var units = {
+			year  : 24 * 60 * 60 * 1000 * 365,
+			month : 24 * 60 * 60 * 1000 * 365/12,
+			day   : 24 * 60 * 60 * 1000,
+			hour  : 60 * 60 * 1000,
+			minute: 60 * 1000,
+			second: 1000
+		}
+
+		// Passing { numeric: 'auto' } in relative_time_options will alter "1 year ago" to "last year"
+		var rtf = new Intl.RelativeTimeFormat(locale.relative_time_format, locale.relative_time_options)
+
+		// "Math.abs" accounts for both "past" & "future" scenarios
+		for (var u in units) {
+			if (Math.abs(timestamp) > units[u] || u == 'second') 
+				return rtf.format(Math.round(timestamp/units[u]), u)
+		}
+	}
+
 	// Return a title for a new note
 	// If the title it wanted to suggest is already occupied, it will recurse to the closest unused number
 	utils.get_new_title = function(depth = 1) {
@@ -841,6 +877,7 @@ ias.cardnote = function() {
 	// - create()										BUTTON HANDLER
 	// - archive()										BUTTON HANDLER
 	// - unarchive()									BUTTON HANDLER
+	// - properties()									BUTTON HANDLER
 	// - reload()
 	//
 	this.define_note = function(note) {
@@ -1084,6 +1121,8 @@ ias.cardnote = function() {
 			} else {
 				add_menu_button("archive", "Archive note")
 			}
+
+			add_menu_button("properties", "Properties")
 		}
 
 		// Editing tool strip
@@ -1201,7 +1240,7 @@ ias.cardnote = function() {
 				
 				// Update the contents
 				// Should trigger an automatic reload
-				core.set_note_text(new_title, text)
+				core.set_note_text(note.info.title, text)
 			}
 
 			// Create button on suggested notes
@@ -1335,6 +1374,13 @@ ias.cardnote = function() {
 			note.unarchive = function() {
 				core.unarchive_note(note.info.title)
 			}
+
+			note.properties = function() {
+				var created = utils.format_time(note.info.created)
+				var modified = utils.format_time(note.info.modified)
+
+				alert("Added: " + created + "\nEdited: " + modified)
+			}
 		}
 
 		// Reload function 
@@ -1365,9 +1411,6 @@ ias.cardnote = function() {
 
 			// Execute the parser
 			parsers[target_parser]()
-
-			// Scroll to the note at last
-			scroll_to()
 
 			
 			// And below are the parser functions
@@ -1535,6 +1578,7 @@ ias.story = function() {
 
 		note.info = info
 		note.reload()
+		note.scroll_to()
 
 		return note
 	}
@@ -1646,6 +1690,10 @@ ias.story = function() {
 		// On renames, remove the stale title, insert the new title, and update the title on every instance
 		if (alert === "note_renamed") {
 			var new_title = instances[0].info.title
+
+			// Safeguard
+			if (new_title in entries)
+				alert("Invalid rename request")
 
 			delete entries[cause]
 			entries[new_title] = instances
@@ -3006,6 +3054,7 @@ drop_area.classList.add("drag_and_drop_area")
 
 var file_input = add("input", file_tip)
 file_input.type = "file"
+file_input.multiple = "true"
 
 window.ondragenter = function() {
 	event.preventDefault()
@@ -3519,6 +3568,16 @@ modified:1646577759617,
 parser:`Markdown`
 },
 {
+title:`Welcome`,
+text:`Try out the new [IAS2](https://a0346f102085fe9f.github.io/IAS2/)! It relies on SPLADEv2 neural network instead of lunr.
+---
+[GitHub](https://github.com/a0346f102085fe9f/IAS/) / [Updates] / [IAS]
+`,
+created:1611675231500,
+modified:1651380625434,
+parser:`Markdown`
+},
+{
 title:`Search`,
 text:`if ("lunr" in search) {
 	show_search_prompt()
@@ -3573,25 +3632,37 @@ async function download_index(url) {
 
 		// Poneb.in and ponepaste.org have different naming conventions
 		// We need to handle both
-		function link_ponebin(title) {
+		function link_ponebin(note, title) {
 			var paste_id = (title.slice(title.lastIndexOf("-") + 1)).slice(0, -4)
 			var link = "https://poneb.in/" + paste_id
-			return "Open at poneb.in: <a href=\\""+link+"\\">"+link+"</a>\\n\\nThe pastes here... they are too hot for GitHub.\\n\\nEven though you see no text, More -> \\"Find similar notes\\" button still functions as intended!"
+			note.text = "Open at poneb.in: <a href=\\""+link+"\\">"+link+"</a>\\n\\nThe pastes here... they are too hot for GitHub.\\n\\nEven though you see no text, More -> \\"Find similar notes\\" button still functions as intended!"
 		}
 
-		function link_ponepaste(title) {
+		function link_ponebin_ru(note, title) {
+			var paste_id = (title.slice(title.lastIndexOf("-") + 1)).slice(0, -4)
+			var link = "https://cloudflare-ipfs.com/ipfs/QmVfF4zAq5jMQT75cpao5ZM53LKhocM17N4QjP8PvAFQFY/" + paste_id
+			note.text = "note.dom.body.innerText = 'Stand by...'; networking.get('" + link + "', function(result) { success('[" + title + "] downloaded.'); note.dom.body.innerText = result })"
+			note.parser = "App"
+		}
+
+		function link_ponepaste(note, title) {
 			var paste_id = parseInt(title)
 			var link = "https://ponepaste.org/" + paste_id
-			return "Open at ponepaste.org: <a href=\\""+link+"\\">"+link+"</a>\\n\\nThe pastes here... they are too hot for GitHub.\\n\\nEven though you see no text, More -> \\"Find similar notes\\" button still functions as intended!"
+			note.text = "Open at ponepaste.org: <a href=\\""+link+"\\">"+link+"</a>\\n\\nThe pastes here... they are too hot for GitHub.\\n\\nEven though you see no text, More -> \\"Find similar notes\\" button still functions as intended!"
 		}
 
 		var link_fn = 0
 
 		// Decide based on the index filename
+		// Special handling for russians
 		if (url.endsWith("index_ponepaste.json")) {
 			link_fn = link_ponepaste
 		} else {
-			link_fn = link_ponebin
+			if (navigator.language != "ru-RU") {
+				link_fn = link_ponebin
+			} else {
+				link_fn = link_ponebin_ru
+			}
 		}
 
 		// All of the stuff should've already been set
@@ -3604,7 +3675,7 @@ async function download_index(url) {
 		for (var i = 0; i < len; i++) {
 			var title = search.idx.id_to_filename[i]
 			var note = core.create_note(title)
-			note.text = link_fn(title)
+			link_fn(note, title)
 			search.idx._documents[i] = {note: note}
 		}
 
@@ -3867,22 +3938,17 @@ function lazy_append(titles, icon, parent, complete_fn, depth = 0) {
 
 `,
 created:1610984355543,
-modified:1651380251107,
+modified:1652201341771,
 parser:`App`
 },
 {
-title:`Welcome`,
-text:`Try out the new [IAS2](https://a0346f102085fe9f.github.io/IAS2/)! It relies on SPLADEv2 neural network instead of lunr.
----
-[GitHub](https://github.com/a0346f102085fe9f/IAS/) / [Updates] / [IAS]
-`,
-created:1611675231500,
-modified:1651380625434,
-parser:`Markdown`
-},
-{
 title:`Updates`,
-text:`> May 1, 2022: [ They All Look Familiar to Me ]
+text:`> May 11, 2022: [ Ponebin did nothing wrong ]
+
+Highlights:
+ - A copy of poneb.in on IPFS
+
+> May 1, 2022: [ They All Look Familiar to Me ]
 
 Highlights:
  - Link IAS2 in the Welcome note
@@ -4293,7 +4359,7 @@ Other:
 > January 26, 2021: [ Initial release ]
 `,
 created:1614426404343,
-modified:1651383005460,
+modified:1652201703768,
 parser:`Text`
 }]
 
